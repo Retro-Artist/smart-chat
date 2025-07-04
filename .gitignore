@@ -22,7 +22,6 @@ media/*
 
 # Logs
 logs/*
-!/logs/.gitkeep
 
 # Cache
 /.phpunit.result.cache
