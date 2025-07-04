@@ -18,10 +18,10 @@ composer.lock
 Thumbs.db
 
 # Media
-/media/*
+media/*
 
 # Logs
-/logs/*
+logs/*
 !/logs/.gitkeep
 
 # Cache
