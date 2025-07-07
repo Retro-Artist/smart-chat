@@ -161,9 +161,23 @@ class Instances {
         if ($instances['success'] && isset($instances['data'])) {
             if ($instanceName) {
                 // Return specific instance if found
-                foreach ($instances['data'] as $instance) {
-                    if ($instance['instance']['instanceName'] === $instanceName) {
-                        return ['success' => true, 'data' => $instance];
+                foreach ($instances['data'] as $instanceData) {
+                    // Handle different possible data structures
+                    if (isset($instanceData['instance'])) {
+                        // Standard structure: data -> instance -> details
+                        $instance = $instanceData['instance'];
+                        $fullData = $instanceData;
+                    } else {
+                        // Direct structure: data -> details
+                        $instance = $instanceData;
+                        $fullData = $instanceData;
+                    }
+                    
+                    // Check instance name in different possible fields
+                    $name = $instance['instanceName'] ?? $instance['name'] ?? null;
+                    
+                    if ($name === $instanceName) {
+                        return ['success' => true, 'data' => $fullData];
                     }
                 }
                 return ['success' => false, 'error' => 'Instance not found'];
