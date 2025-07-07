@@ -10,6 +10,7 @@
 require_once __DIR__ . '/../src/EvolutionAPI/EvolutionAPI.php';
 require_once __DIR__ . '/../src/EvolutionAPI/Instances.php';
 require_once __DIR__ . '/../src/EvolutionAPI/SendMessage.php';
+require_once __DIR__ . '/../src/EvolutionAPI/MediaHandler.php';
 
 $config = require_once __DIR__ . '/../app/config.php';
 
@@ -33,6 +34,7 @@ if (empty($apiKey) || empty($serverUrl) || empty($instance)) {
 $api = new EvolutionAPI($serverUrl, $apiKey, $instance);
 $instances = new Instances($api);
 $sendMessage = new SendMessage($api);
+$mediaHandler = new MediaHandler($api, __DIR__ . '/../media/', __DIR__ . '/../temp/');
 
 echo "🚀 Evolution API Simple Test\n";
 echo "Instance: $instance\n";
@@ -66,7 +68,16 @@ if ($isConnected) {
 // Test 3: Send test message (if number provided)
 if (!empty($testNumber)) {
     echo "3. Sending test message...\n";
-    $result = $sendMessage->sendSimpleMessage($testNumber, "Olá! " . date('H:i:s'));
+    
+    // Choose your test type:
+    // Option A: Simple text message
+    //$result = $sendMessage->sendSimpleMessage($testNumber, "Hello from Evolution API! " . date('H:i:s'));
+    
+    // Option B: Send audio from media directory (uncomment to use)
+    // $result = $mediaHandler->sendWhatsAppAudioFromMediaDir($testNumber, "audio/message.mp3");
+    
+    // Option C: Send image from media directory (uncomment to use)
+    // $result = $mediaHandler->sendFromMediaDir($testNumber, "images/photo1.jpg", "Test image");
     
     if ($result['success']) {
         echo "   ✅ Message sent successfully\n";
