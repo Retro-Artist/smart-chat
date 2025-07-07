@@ -10,19 +10,19 @@ if (!$envLoaded) {
 
 return [
     'evolutionAPI' => [
-        'enabled' => getenv('EVOLUTION_API') === 'true',
+        'enabled' => getenv('EVOLUTION_API_ENABLED'),  
         'api_url' => getenv('EVOLUTION_API_URL'),
         'api_key' => getenv('EVOLUTION_API_KEY'),
     ],
 
     'testing' => [
-        'enabled' => getenv('TEST_EVOLUTION_API_ENABLED') === 'true',
+        'enabled' => getenv('TEST_EVOLUTION_API_ENABLED'),
         'instance' => getenv('TEST_EVOLUTION_API_INSTANCE'),
         'phone_number' => getenv('TEST_EVOLUTION_API_NUMBER'),
     ],
     
     'openai' => [
-        'enabled' => getenv('OPENAI_API') === 'true',
+        'enabled' => getenv('OPENAI_API_ENABLED'),
         'api_url' => getenv('OPENAI_API_URL'),
         'api_key' => getenv('OPENAI_API_KEY'),
         'model' => getenv('OPENAI_MODEL'),
