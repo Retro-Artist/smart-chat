@@ -1,5 +1,5 @@
 <?php
-// public/index.php - Main entry point for all requests
+// public/index.php - Updated with WhatsApp routes
 
 // Start output buffering to catch any accidental output
 ob_start();
@@ -27,7 +27,11 @@ if ($isApiRequest) {
 // Initialize router
 $router = new Router();
 
-// Web Routes (return HTML pages)
+// ===================================
+// WEB ROUTES (HTML Pages)
+// ===================================
+
+// Existing routes
 $router->addWebRoute('GET', '/', 'HomeController@index');
 $router->addWebRoute('GET', '/chat', 'ChatController@index');
 $router->addWebRoute('GET', '/dashboard', 'DashboardController@index');
@@ -38,7 +42,14 @@ $router->addWebRoute('GET', '/register', 'AuthController@showRegister');
 $router->addWebRoute('POST', '/register', 'AuthController@processRegister');
 $router->addWebRoute('GET', '/logout', 'AuthController@logout');
 
-// API Routes (return JSON responses)
+// NEW: WhatsApp routes
+$router->addWebRoute('GET', '/whatsapp/connect', 'WhatsAppController@connect');
+
+// ===================================
+// API ROUTES (JSON Responses)
+// ===================================
+
+// Existing OpenAI API routes
 $router->addApiRoute('GET', '/api/threads', 'ThreadsAPI@getThreads');
 $router->addApiRoute('POST', '/api/threads', 'ThreadsAPI@createThread');
 $router->addApiRoute('GET', '/api/threads/{id}', 'ThreadsAPI@getThread');
@@ -60,7 +71,36 @@ $router->addApiRoute('POST', '/api/tools/{name}/execute', 'ToolsAPI@executeTool'
 $router->addApiRoute('GET', '/api/system/status', 'SystemAPI@getStatus');
 $router->addApiRoute('GET', '/api/system/config', 'SystemAPI@getConfig');
 
-// Handle the request
+// ===================================
+// NEW: WHATSAPP API ROUTES
+// ===================================
+
+// Instance Management
+$router->addApiRoute('POST', '/api/whatsapp/create-instance', 'WhatsAppController@createInstance');
+$router->addApiRoute('GET', '/api/whatsapp/instances', 'WhatsAppController@listInstances');
+$router->addApiRoute('DELETE', '/api/whatsapp/delete', 'WhatsAppController@deleteInstance');
+$router->addApiRoute('POST', '/api/whatsapp/restart', 'WhatsAppController@restartInstance');
+
+// Connection Management
+$router->addApiRoute('GET', '/api/whatsapp/qr', 'WhatsAppController@getQRCode');
+$router->addApiRoute('GET', '/api/whatsapp/status', 'WhatsAppController@getStatus');
+$router->addApiRoute('GET', '/api/whatsapp/test-connection', 'WhatsAppController@testConnection');
+
+// Settings & Configuration
+$router->addApiRoute('POST', '/api/whatsapp/settings', 'WhatsAppController@updateSettings');
+$router->addApiRoute('POST', '/api/whatsapp/toggle-auto-response', 'WhatsAppController@toggleAutoResponse');
+
+// Contacts & Conversations
+$router->addApiRoute('GET', '/api/whatsapp/contacts', 'WhatsAppController@getContacts');
+$router->addApiRoute('GET', '/api/whatsapp/dashboard-widget', 'WhatsAppController@dashboardWidget');
+
+// Webhook Endpoint (receives Evolution API webhooks)
+$router->addApiRoute('POST', '/api/whatsapp/webhook', 'WhatsAppController@webhook');
+
+// ===================================
+// HANDLE REQUEST
+// ===================================
+
 try {
     $router->handleRequest();
 } catch (Exception $e) {
@@ -68,8 +108,17 @@ try {
         // Clean any output and return clean JSON error
         ob_clean();
         http_response_code(500);
-        echo json_encode(['error' => 'Internal server error']);
+        echo json_encode([
+            'success' => false,
+            'error' => 'Internal server error',
+            'message' => $e->getMessage()
+        ]);
     } else {
-        echo "An error occurred: " . $e->getMessage();
+        // Load error view for web requests
+        http_response_code(500);
+        include '../src/Web/Views/error.php';
     }
+    
+    // Log the error
+    error_log("Router error: " . $e->getMessage() . " in " . $e->getFile() . " on line " . $e->getLine());
 }

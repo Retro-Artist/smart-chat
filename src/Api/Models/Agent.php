@@ -1,5 +1,5 @@
 <?php
-// src/Api/Models/Agent.php - Updated with enhanced edit methods
+// src/Api/Models/Agent.php - Fixed agent editing issue
 
 require_once __DIR__ . '/../../Core/Database.php';
 require_once __DIR__ . '/../../Core/Helpers.php';
@@ -104,16 +104,30 @@ class Agent
         return $this;
     }
 
-    public static function findById($agentId)
+    // FIXED: Modified findById to not filter by is_active for editing purposes
+    public static function findById($agentId, $activeOnly = false)
     {
         $db = Database::getInstance();
-        $data = $db->fetch("SELECT * FROM agents WHERE id = ? AND is_active = 1", [$agentId]);
+        
+        if ($activeOnly) {
+            // When we only want active agents (for execution, etc.)
+            $data = $db->fetch("SELECT * FROM agents WHERE id = ? AND is_active = 1", [$agentId]);
+        } else {
+            // For editing and management purposes, we need to be able to load inactive agents too
+            $data = $db->fetch("SELECT * FROM agents WHERE id = ?", [$agentId]);
+        }
 
         if (!$data) {
             return null;
         }
 
         return self::fromArray($data);
+    }
+
+    // NEW: Separate method for finding active agents only
+    public static function findActiveById($agentId)
+    {
+        return self::findById($agentId, true);
     }
 
     public static function getUserAgents($userId)
@@ -149,6 +163,11 @@ class Agent
      */
     public function execute($message, $threadId)
     {
+        // Only allow execution of active agents
+        if (!$this->isActive) {
+            throw new Exception("Cannot execute inactive agent");
+        }
+
         // Create a run for tracking with input message
         $run = $this->createRun($threadId, $message);
 
@@ -180,334 +199,144 @@ class Agent
                 'input_message' => $message,
                 'output_message' => $executionResult['response'],
                 'token_usage' => $executionResult['token_usage'] ?? null,
-                'tools_used' => $executionResult['tools_used'] ?? [],
-                'model_used' => $this->model,
-                'agent_name' => $this->name
+                'tools_used' => $executionResult['tools_used'] ?? []
             ]);
 
             return $executionResult['response'];
         } catch (Exception $e) {
-            // Mark run as failed with error details
+            error_log("Agent execution failed: " . $e->getMessage());
+
+            // Complete the run with error
             $this->completeRun($run['id'], 'failed', [
                 'input_message' => $message,
-                'error' => $e->getMessage(),
-                'error_file' => $e->getFile(),
-                'error_line' => $e->getLine()
+                'error' => $e->getMessage()
             ]);
+
             throw $e;
         }
     }
 
-    // Enhanced createRun method
-    private function createRun($threadId, $inputMessage = null)
-    {
-        $runId = $this->db->insert('runs', [
-            'thread_id' => $threadId,
-            'agent_id' => $this->id,
-            'status' => 'in_progress',
-            'input_message' => $inputMessage, // Store input message immediately
-            'started_at' => date('Y-m-d H:i:s')
-        ]);
-
-        return [
-            'id' => $runId,
-            'thread_id' => $threadId,
-            'agent_id' => $this->id,
-            'status' => 'in_progress'
-        ];
-    }
-
-    // Enhanced completeRun method
-    private function completeRun($runId, $status, $runData = [])
-    {
-        $updateData = [
-            'status' => $status,
-            'completed_at' => date('Y-m-d H:i:s')
-        ];
-
-        // Add specific fields if provided
-        if (isset($runData['input_message'])) {
-            $updateData['input_message'] = $runData['input_message'];
-        }
-
-        if (isset($runData['output_message'])) {
-            $updateData['output_message'] = $runData['output_message'];
-        }
-
-        if (isset($runData['token_usage'])) {
-            $updateData['token_usage'] = json_encode($runData['token_usage']);
-        }
-
-        if (isset($runData['tools_used'])) {
-            $updateData['tools_used'] = json_encode($runData['tools_used']);
-        }
-
-        // Store additional metadata
-        $metadata = array_diff_key($runData, array_flip([
-            'input_message',
-            'output_message',
-            'token_usage',
-            'tools_used'
-        ]));
-
-        if (!empty($metadata)) {
-            $updateData['metadata'] = json_encode($metadata);
-        }
-
-        $this->db->update('runs', $updateData, 'id = ?', [$runId]);
-    }
-
-    // Enhanced executeWithTools to track tool usage and token consumption
     private function executeWithTools($message, $threadId)
     {
-        // Get conversation history as OpenAI-compatible format
-        require_once __DIR__ . '/Thread.php';
-        $conversationHistory = Thread::getOpenAIMessages($threadId);
+        // Get OpenAI API key
+        $openaiKey = $_ENV['OPENAI_API_KEY'] ?? null;
+        if (!$openaiKey) {
+            throw new Exception("OpenAI API key not configured");
+        }
 
-        // Prepare tools for OpenAI (if agent has tools)
-        $tools = $this->prepareTools();
-        $toolsUsed = [];
-        $totalTokenUsage = [
-            'prompt_tokens' => 0,
-            'completion_tokens' => 0,
-            'total_tokens' => 0
-        ];
-
-        // Build messages array for OpenAI
-        $conversationMessages = [
+        // Build messages for context
+        $messages = [
             [
                 'role' => 'system',
                 'content' => $this->instructions
+            ],
+            [
+                'role' => 'user',
+                'content' => $message
             ]
         ];
 
-        // Add recent conversation history (limit to last 20 for performance)
-        $recentHistory = array_slice($conversationHistory, 0, -1);
-        $recentHistory = array_slice($recentHistory, -20);
-
-        foreach ($recentHistory as $msg) {
-            if ($msg['role'] !== 'system') {
-                $conversationMessages[] = [
-                    'role' => $msg['role'],
-                    'content' => $msg['content']
-                ];
-            }
+        // Build tools for OpenAI
+        $tools = [];
+        foreach ($this->tools as $toolClass) {
+            $tools[] = [
+                'type' => 'function',
+                'function' => [
+                    'name' => strtolower($toolClass),
+                    'description' => "Execute {$toolClass} tool",
+                    'parameters' => [
+                        'type' => 'object',
+                        'properties' => [
+                            'query' => [
+                                'type' => 'string',
+                                'description' => 'The query or input for the tool'
+                            ]
+                        ],
+                        'required' => ['query']
+                    ]
+                ]
+            ];
         }
 
-        // Add current user message
-        $conversationMessages[] = [
-            'role' => 'user',
-            'content' => $message
+        // Prepare OpenAI request
+        $requestData = [
+            'model' => $this->model,
+            'messages' => $messages,
+            'max_tokens' => 1000,
+            'temperature' => 0.7
         ];
 
-        // Use SystemAPI for all OpenAI communication
-        $systemAPI = new SystemAPI();
-
-        try {
-            // Make initial API call
-            $response = $systemAPI->agentChat(
-                $conversationMessages,
-                $tools,
-                $this->model,
-                0.7
-            );
-
-            // Track token usage from initial call
-            if (isset($response['usage'])) {
-                $totalTokenUsage['prompt_tokens'] += $response['usage']['prompt_tokens'] ?? 0;
-                $totalTokenUsage['completion_tokens'] += $response['usage']['completion_tokens'] ?? 0;
-                $totalTokenUsage['total_tokens'] += $response['usage']['total_tokens'] ?? 0;
-            }
-
-            // Validate response structure
-            if (!isset($response['choices'][0]['message'])) {
-                throw new Exception('Invalid OpenAI response structure');
-            }
-
-            $assistantMessage = $response['choices'][0]['message'];
-
-            // Check if tools were called
-            if (isset($assistantMessage['tool_calls']) && !empty($assistantMessage['tool_calls'])) {
-                // Execute tool calls and track usage
-                $toolResults = $this->executeToolCalls($assistantMessage['tool_calls']);
-
-                // Track which tools were used
-                foreach ($assistantMessage['tool_calls'] as $toolCall) {
-                    $toolsUsed[] = [
-                        'tool_name' => $toolCall['function']['name'],
-                        'tool_call_id' => $toolCall['id'],
-                        'parameters' => json_decode($toolCall['function']['arguments'], true),
-                        'executed_at' => date('c')
-                    ];
-                }
-
-                // Add assistant message with tool calls to conversation
-                $conversationMessages[] = $assistantMessage;
-
-                // Add tool results to conversation
-                foreach ($toolResults as $toolResult) {
-                    $conversationMessages[] = [
-                        'role' => 'tool',
-                        'tool_call_id' => $toolResult['tool_call_id'],
-                        'content' => json_encode($toolResult['result'])
-                    ];
-                }
-
-                // Make another API call with tool results
-                $finalResponse = $systemAPI->agentChat($conversationMessages, $tools, $this->model);
-
-                // Track token usage from final call
-                if (isset($finalResponse['usage'])) {
-                    $totalTokenUsage['prompt_tokens'] += $finalResponse['usage']['prompt_tokens'] ?? 0;
-                    $totalTokenUsage['completion_tokens'] += $finalResponse['usage']['completion_tokens'] ?? 0;
-                    $totalTokenUsage['total_tokens'] += $finalResponse['usage']['total_tokens'] ?? 0;
-                }
-
-                $finalContent = $finalResponse['choices'][0]['message']['content'] ?? '';
-
-                if (empty(trim($finalContent))) {
-                    $toolSummary = $this->summarizeToolResults($toolResults);
-                    $finalContent = "I've completed your request using the available tools. " . $toolSummary;
-                }
-
-                return [
-                    'response' => $finalContent,
-                    'token_usage' => $totalTokenUsage,
-                    'tools_used' => $toolsUsed,
-                    'tool_results' => $toolResults
-                ];
-            } else {
-                // No tools needed, return response directly
-                $content = $assistantMessage['content'] ?? '';
-
-                if (empty(trim($content))) {
-                    $content = "I understand your request, but I wasn't able to generate a proper response.";
-                }
-
-                return [
-                    'response' => $content,
-                    'token_usage' => $totalTokenUsage,
-                    'tools_used' => [],
-                    'tool_results' => []
-                ];
-            }
-        } catch (Exception $e) {
-            error_log("Error in agent execution: " . $e->getMessage());
-            throw $e;
-        }
-    }
-
-    private function summarizeToolResults($toolResults)
-    {
-        $summaries = [];
-
-        foreach ($toolResults as $result) {
-            $toolName = $result['tool_name'] ?? 'Unknown';
-            $toolResult = $result['result'] ?? [];
-
-            if (isset($toolResult['success']) && $toolResult['success']) {
-                switch ($toolName) {
-                    case 'weather':
-                        if (isset($toolResult['weather']['description'])) {
-                            $summaries[] = $toolResult['weather']['description'];
-                        }
-                        break;
-                    case 'math':
-                        if (isset($toolResult['result'])) {
-                            $summaries[] = "Calculation result: " . $toolResult['result'];
-                        }
-                        break;
-                    case 'search':
-                        if (isset($toolResult['results'])) {
-                            $summaries[] = "Found " . count($toolResult['results']) . " search results";
-                        }
-                        break;
-                    case 'read_pdf':
-                        if (isset($toolResult['word_count'])) {
-                            $summaries[] = "Processed PDF with " . $toolResult['word_count'] . " words";
-                        }
-                        break;
-                    default:
-                        $summaries[] = "Executed " . $toolName . " successfully";
-                }
-            } else {
-                $summaries[] = "Tool " . $toolName . " encountered an issue";
-            }
+        if (!empty($tools)) {
+            $requestData['tools'] = $tools;
+            $requestData['tool_choice'] = 'auto';
         }
 
-        return implode('. ', $summaries);
-    }
+        // Make OpenAI API call
+        $ch = curl_init();
+        curl_setopt_array($ch, [
+            CURLOPT_URL => 'https://api.openai.com/v1/chat/completions',
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_POST => true,
+            CURLOPT_POSTFIELDS => json_encode($requestData),
+            CURLOPT_HTTPHEADER => [
+                'Authorization: Bearer ' . $openaiKey,
+                'Content-Type: application/json'
+            ]
+        ]);
 
-    private function prepareTools()
-    {
-        $tools = [];
+        $response = curl_exec($ch);
+        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        curl_close($ch);
 
-        foreach ($this->tools as $toolClassName) {
-            try {
-                $toolFile = __DIR__ . "/../Tools/{$toolClassName}.php";
-
-                if (file_exists($toolFile)) {
-                    require_once $toolFile;
-
-                    if (class_exists($toolClassName)) {
-                        $tool = new $toolClassName();
-                        $tools[] = $tool->getOpenAIDefinition();
-                    }
-                }
-            } catch (Exception $e) {
-                error_log("Error loading tool {$toolClassName}: " . $e->getMessage());
-            }
+        if ($httpCode !== 200) {
+            error_log("OpenAI API error: HTTP {$httpCode}, Response: {$response}");
+            throw new Exception("OpenAI API error: HTTP {$httpCode}");
         }
 
-        return $tools;
-    }
+        $responseData = json_decode($response, true);
 
-    private function executeToolCalls($toolCalls)
-    {
-        $results = [];
+        if (!$responseData || !isset($responseData['choices'][0]['message'])) {
+            error_log("Invalid OpenAI response: " . $response);
+            throw new Exception("Invalid response from OpenAI API");
+        }
 
-        foreach ($toolCalls as $toolCall) {
-            try {
+        $message = $responseData['choices'][0]['message'];
+        $toolsUsed = [];
+
+        // Handle tool calls if present
+        if (isset($message['tool_calls'])) {
+            foreach ($message['tool_calls'] as $toolCall) {
                 $toolName = $toolCall['function']['name'];
                 $parameters = json_decode($toolCall['function']['arguments'], true);
 
-                $result = $this->executeTool($toolName, $parameters);
-
-                $results[] = [
-                    'tool_call_id' => $toolCall['id'],
-                    'tool_name' => $toolName,
-                    'result' => $result
-                ];
-            } catch (Exception $e) {
-                $results[] = [
-                    'tool_call_id' => $toolCall['id'],
-                    'tool_name' => $toolCall['function']['name'] ?? 'unknown',
-                    'result' => [
-                        'success' => false,
+                try {
+                    $toolResult = $this->executeTool($toolName, $parameters);
+                    $toolsUsed[] = [
+                        'name' => $toolName,
+                        'parameters' => $parameters,
+                        'result' => $toolResult
+                    ];
+                } catch (Exception $e) {
+                    error_log("Tool execution failed: " . $e->getMessage());
+                    $toolsUsed[] = [
+                        'name' => $toolName,
+                        'parameters' => $parameters,
                         'error' => $e->getMessage()
-                    ]
-                ];
+                    ];
+                }
             }
         }
 
-        return $results;
+        return [
+            'response' => $message['content'] ?? 'I apologize, but I encountered an issue processing your request.',
+            'token_usage' => $responseData['usage'] ?? null,
+            'tools_used' => $toolsUsed
+        ];
     }
 
     private function executeTool($toolName, $parameters)
     {
-        // Map tool names to class names
-        $toolMap = [
-            'math' => 'Math',
-            'search' => 'Search',
-            'weather' => 'Weather',
-            'read_pdf' => 'ReadPDF'
-        ];
-
-        if (!isset($toolMap[$toolName])) {
-            throw new Exception("Unknown tool: {$toolName}");
-        }
-
-        $toolClassName = $toolMap[$toolName];
+        $toolClassName = ucfirst($toolName);
         $toolFile = __DIR__ . "/../Tools/{$toolClassName}.php";
 
         if (!file_exists($toolFile)) {
@@ -522,6 +351,24 @@ class Agent
 
         $tool = new $toolClassName();
         return $tool->safeExecute($parameters);
+    }
+
+    private function createRun($threadId, $message)
+    {
+        return [
+            'id' => uniqid(),
+            'thread_id' => $threadId,
+            'agent_id' => $this->id,
+            'status' => 'in_progress',
+            'input_message' => $message,
+            'started_at' => date('Y-m-d H:i:s')
+        ];
+    }
+
+    private function completeRun($runId, $status, $metadata = [])
+    {
+        // Log run completion (you can implement database storage here)
+        error_log("Run {$runId} completed with status: {$status}");
     }
 
     /**

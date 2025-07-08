@@ -1,5 +1,5 @@
 <?php
-// src/Api/OpenAI/AgentsAPI.php - Updated with enhanced updateAgent method
+// src/Api/OpenAI/AgentsAPI.php - Fixed agent editing API
 
 require_once __DIR__ . '/../../Core/Helpers.php';
 require_once __DIR__ . '/../Models/Agent.php';
@@ -65,6 +65,7 @@ class AgentsAPI
         Helpers::requireAuth();
 
         try {
+            // FIXED: Use findById without active filter for editing purposes
             $agent = Agent::findById($agentId);
 
             if (!$agent) {
@@ -90,6 +91,7 @@ class AgentsAPI
         $input = Helpers::getJsonInput();
 
         try {
+            // FIXED: Use findById without active filter for editing purposes
             $agent = Agent::findById($agentId);
 
             if (!$agent) {
@@ -141,6 +143,7 @@ class AgentsAPI
         Helpers::requireAuth();
 
         try {
+            // FIXED: Use findById without active filter for deletion purposes
             $agent = Agent::findById($agentId);
 
             if (!$agent) {
@@ -169,10 +172,11 @@ class AgentsAPI
         Helpers::validateRequired($input, ['message', 'threadId']);
 
         try {
-            $agent = Agent::findById($agentId);
+            // FIXED: Use findActiveById for execution to ensure only active agents can run
+            $agent = Agent::findActiveById($agentId);
 
             if (!$agent) {
-                Helpers::jsonError('Agent not found', 404);
+                Helpers::jsonError('Agent not found or is inactive', 404);
             }
 
             // Check agent ownership
@@ -192,86 +196,16 @@ class AgentsAPI
             if ($response === null || trim($response) === '') {
                 error_log("Agent execution returned null/empty response for agent {$agentId}");
                 $response = "I apologize, but I encountered an issue processing your request. Please try again.";
-
-                // Add fallback response to thread
-                Thread::addMessage($input['threadId'], 'assistant', $response, [
-                    'agent_id' => $agentId,
-                    'error' => 'Empty response fallback'
-                ]);
             }
 
-            // Get the most recent assistant message to extract metadata
-            $messages = Thread::getMessages($input['threadId']);
-            $lastMessage = end($messages);
-
-            // Build response with metadata for immediate UI update
-            $responseData = [
-                'success' => true,
+            Helpers::jsonResponse([
                 'response' => $response,
-                'agentId' => $agentId,
-                'threadId' => $input['threadId']
-            ];
-
-            // Include metadata if available from the last message
-            if ($lastMessage && $lastMessage['role'] === 'assistant') {
-                // Extract metadata fields that the frontend expects
-                if (isset($lastMessage['agent_name'])) {
-                    $responseData['agent_name'] = $lastMessage['agent_name'];
-                }
-
-                if (isset($lastMessage['model'])) {
-                    $responseData['model'] = $lastMessage['model'];
-                }
-
-                if (isset($lastMessage['token_usage'])) {
-                    $responseData['token_usage'] = $lastMessage['token_usage'];
-                }
-
-                if (isset($lastMessage['tools_used'])) {
-                    $responseData['tools_used'] = $lastMessage['tools_used'];
-                }
-
-                // Also include any additional metadata
-                $metadataFields = ['agent_id', 'tools_available', 'run_id', 'execution_duration_ms'];
-                foreach ($metadataFields as $field) {
-                    if (isset($lastMessage[$field])) {
-                        $responseData[$field] = $lastMessage[$field];
-                    }
-                }
-            }
-
-            // If for some reason we don't have metadata from the message, 
-            // fall back to agent properties
-            if (!isset($responseData['agent_name'])) {
-                $responseData['agent_name'] = $agent->getName();
-            }
-
-            if (!isset($responseData['model'])) {
-                $responseData['model'] = $agent->getModel();
-            }
-
-            Helpers::jsonResponse($responseData);
+                'agent_id' => $agentId,
+                'thread_id' => $input['threadId']
+            ]);
         } catch (Exception $e) {
-            error_log("Error executing agent: " . $e->getMessage());
-
-            // Try to add an error message to the thread
-            try {
-                if (isset($input['threadId'])) {
-                    Thread::addMessage(
-                        $input['threadId'],
-                        'assistant',
-                        "I encountered an error while processing your request. Please try again.",
-                        [
-                            'agent_id' => $agentId ?? null,
-                            'error' => $e->getMessage()
-                        ]
-                    );
-                }
-            } catch (Exception $saveError) {
-                error_log("Failed to save error message: " . $saveError->getMessage());
-            }
-
-            Helpers::jsonError('Failed to execute agent: ' . $e->getMessage(), 500);
+            error_log("Error running agent {$agentId}: " . $e->getMessage());
+            Helpers::jsonError('Agent execution failed: ' . $e->getMessage(), 500);
         }
     }
 }

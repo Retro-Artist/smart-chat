@@ -12,7 +12,7 @@ require_once __DIR__ . '/../src/EvolutionAPI/Instances.php';
 require_once __DIR__ . '/../src/EvolutionAPI/SendMessage.php';
 require_once __DIR__ . '/../src/EvolutionAPI/MediaHandler.php';
 
-$config = require_once __DIR__ . '/../app/config.php';
+$config = require_once __DIR__ . '/../config/config.php';
 
 // Configuration
 $serverUrl = $config['evolutionAPI']['api_url'];

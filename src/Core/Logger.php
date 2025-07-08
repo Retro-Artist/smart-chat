@@ -1,8 +1,5 @@
 <?php
-/**
- * Application Logger
- * Simple logging system with different levels
- */
+// src/Core/Logger.php - Fixed __wakeup visibility issue
 
 class Logger {
     private static $instance = null;
@@ -15,8 +12,14 @@ class Logger {
     const CRITICAL = 'CRITICAL';
     
     private function __construct() {
-        $config = require __DIR__ . '/../../config/app.php';
-        $this->enabled = $config['app']['debug'] ?? false;
+        // Try to load config, fallback to default if not available
+        $configFile = __DIR__ . '/../../config/config.php';
+        if (file_exists($configFile)) {
+            $config = require $configFile;
+            $this->enabled = $config['app']['debug'] ?? true;
+        } else {
+            $this->enabled = true; // Default to enabled
+        }
     }
     
     public static function getInstance() {
@@ -114,6 +117,6 @@ class Logger {
     // Prevent cloning
     private function __clone() {}
     
-    // Prevent unserialization
-    private function __wakeup() {}
+    // FIXED: Make __wakeup method public (required in PHP 8+)
+    public function __wakeup() {}
 }

@@ -1,14 +1,14 @@
 <?php
-// src/Web/Controllers/DashboardController.php  
+// src/Web/Controllers/DashboardController.php - FIXED
 
 require_once __DIR__ . '/../../Core/Helpers.php';
+require_once __DIR__ . '/../../Core/Database.php';  // <- This was missing!
 require_once __DIR__ . '/../../Api/Models/Thread.php';
 require_once __DIR__ . '/../../Api/Models/Agent.php';
 require_once __DIR__ . '/../../Api/Models/Run.php';
 
 class DashboardController
 {
-
     public function index()
     {
         // Check if user is logged in
@@ -19,7 +19,7 @@ class DashboardController
         // Get user's agents
         $agents = Agent::getUserAgents($userId);
 
-        // Get recent threads
+        // Get recent threads  
         $recentThreads = Thread::getRecentThreads($userId, 5);
 
         // Get run statistics
@@ -42,8 +42,7 @@ class DashboardController
             'with_messages' => count(array_filter($allThreads, fn($t) => $t['message_count'] > 0)),
             'recent' => count(array_filter(
                 $allThreads,
-                fn($t) =>
-                strtotime($t['created_at']) > strtotime('-7 days')
+                fn($t) => strtotime($t['created_at']) > strtotime('-7 days')
             ))
         ];
 
@@ -65,26 +64,21 @@ class DashboardController
                 'failed_runs' => 0,
                 'running_runs' => 0
             ],
-            // Add real chart data
             'conversationChartData' => $conversationChartData,
             'agentPerformanceData' => $agentPerformanceData
         ]);
     }
 
-    /**
-     * Get real conversation data for the last 7 days
-     */
     private function getConversationChartData($userId)
     {
         $db = Database::getInstance();
 
-        // Get conversation counts for last 7 days
         $sql = "
             SELECT 
                 DATE(created_at) as date,
                 COUNT(*) as count
             FROM threads 
-            WHERE user_id = ? 
+            WHERE user_id = ?
             AND created_at >= DATE_SUB(CURDATE(), INTERVAL 7 DAY)
             GROUP BY DATE(created_at)
             ORDER BY date ASC
@@ -92,7 +86,6 @@ class DashboardController
 
         $results = $db->fetchAll($sql, [$userId]);
 
-        // Create complete 7-day dataset with zero values for missing days
         $data = [];
         $labels = [];
 
@@ -101,7 +94,6 @@ class DashboardController
             $label = date('M j', strtotime("-{$i} days"));
             $labels[] = $label;
 
-            // Find count for this date
             $count = 0;
             foreach ($results as $result) {
                 if ($result['date'] === $date) {
@@ -118,14 +110,10 @@ class DashboardController
         ];
     }
 
-    /**
-     * Get real agent performance data
-     */
     private function getAgentPerformanceData($userId)
     {
         $db = Database::getInstance();
 
-        // Get run statistics
         $sql = "
             SELECT 
                 status,
