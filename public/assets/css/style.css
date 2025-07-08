@@ -1,0 +1,475 @@
+/* public/assets/css/style.css - Simplified with instant theme switching */
+
+/* Import Outfit font from Google Fonts */
+@import url("https://fonts.googleapis.com/css2?family=Outfit:wght@100..900&display=swap");
+
+/* Apply Outfit font to all elements */
+* {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell,
+    "Open Sans", "Helvetica Neue", sans-serif;
+}
+
+/* Optional: Set specific weights for different elements */
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  font-weight: 700;
+}
+
+body {
+  font-weight: 400;
+}
+
+/* ==========================================
+   FORCED CONSISTENCY FOR PROBLEMATIC ELEMENTS
+   Ensures all elements update immediately
+   ========================================== */
+
+/* Force immediate theme application on all elements */
+*,
+*:before,
+*:after {
+  transition: none !important;
+}
+
+/* Specifically target elements that commonly have theme issues */
+.border,
+[class*="border-"],
+.shadow,
+[class*="shadow-"],
+.bg-white,
+.bg-gray-50,
+.bg-gray-100,
+.bg-gray-200,
+.bg-gray-800,
+.bg-gray-900,
+.text-gray-500,
+.text-gray-600,
+.text-gray-700,
+.text-gray-800,
+.text-gray-900,
+canvas,
+svg,
+path {
+  transition: none !important;
+}
+
+/* Dark mode overrides - force immediate application */
+.dark .border,
+.dark [class*="border-"],
+.dark .shadow,
+.dark [class*="shadow-"],
+.dark .bg-white,
+.dark .bg-gray-50,
+.dark .bg-gray-100,
+.dark .bg-gray-200,
+.dark .bg-gray-800,
+.dark .bg-gray-900,
+.dark .text-gray-500,
+.dark .text-gray-600,
+.dark .text-gray-700,
+.dark .text-gray-800,
+.dark .text-gray-900 {
+  transition: none !important;
+}
+
+/* Chart.js canvas specific fixes */
+canvas {
+  background: transparent !important;
+}
+
+.dark canvas {
+  background: transparent !important;
+}
+
+/* Force chart containers to update immediately */
+.chart-container,
+[class*="chart"],
+.recharts-wrapper,
+.recharts-surface {
+  transition: none !important;
+}
+
+/* SVG elements in charts */
+svg *,
+.dark svg * {
+  transition: none !important;
+}
+
+/* Chart legend and tooltip fixes */
+.chartjs-tooltip,
+.chart-legend,
+.recharts-legend-wrapper,
+.recharts-tooltip-wrapper {
+  transition: none !important;
+}
+
+.dark .chartjs-tooltip,
+.dark .chart-legend,
+.dark .recharts-legend-wrapper,
+.dark .recharts-tooltip-wrapper {
+  transition: none !important;
+}
+
+/* Only allow smooth transitions for non-theme properties */
+.smooth-transform {
+  transition: transform 0.2s ease !important;
+}
+
+.smooth-opacity {
+  transition: opacity 0.2s ease !important;
+}
+
+.smooth-scale {
+  transition: transform 0.15s ease !important;
+}
+
+/* Hover effects can still have quick transitions */
+button:hover,
+a:hover,
+.hover-effect:hover {
+  transition: transform 0.1s ease, box-shadow 0.1s ease !important;
+}
+
+/* ==========================================
+   SCROLLBAR STYLES - NO TRANSITIONS
+   ========================================== */
+
+/* Global scrollbar width and behavior */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #d1d5db #f9fafb;
+}
+
+/* Light mode scrollbars */
+*::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+*::-webkit-scrollbar-track {
+  background: #f9fafb;
+  border-radius: 4px;
+}
+
+*::-webkit-scrollbar-thumb {
+  background: #d1d5db;
+  border-radius: 4px;
+  border: 1px solid #f9fafb;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background: #9ca3af;
+}
+
+*::-webkit-scrollbar-corner {
+  background: #f9fafb;
+}
+
+/* Dark mode scrollbars - instant change */
+.dark * {
+  scrollbar-color: #4b5563 #1f2937;
+}
+
+.dark *::-webkit-scrollbar-track {
+  background: #1f2937;
+}
+
+.dark *::-webkit-scrollbar-thumb {
+  background: #4b5563;
+  border: 1px solid #1f2937;
+}
+
+.dark *::-webkit-scrollbar-thumb:hover {
+  background: #6b7280;
+}
+
+.dark *::-webkit-scrollbar-corner {
+  background: #1f2937;
+}
+
+/* Thin scrollbars for specific areas */
+.custom-scrollbar {
+  scrollbar-width: thin;
+}
+
+.custom-scrollbar::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  border: none;
+}
+
+/* Hide scrollbars completely when needed */
+.no-scrollbar {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+/* Smooth scrolling for the entire page */
+html {
+  scroll-behavior: smooth;
+}
+
+/* ==========================================
+   FOCUS STYLES
+   ========================================== */
+
+/* Focus styles can still have quick transitions for accessibility */
+*:focus {
+  outline: 2px solid #0ea5e9;
+  outline-offset: 2px;
+  transition: outline-color 0.1s ease !important;
+}
+
+.dark *:focus {
+  outline-color: #38bdf8;
+}
+
+/* Remove default focus styles for mouse users */
+*:focus:not(:focus-visible) {
+  outline: none;
+}
+
+/* Enhanced focus styles for interactive elements */
+button:focus,
+input:focus,
+textarea:focus,
+select:focus,
+a:focus {
+  outline: 2px solid #0ea5e9;
+  outline-offset: 2px;
+  transition: outline-color 0.1s ease !important;
+}
+
+.dark button:focus,
+.dark input:focus,
+.dark textarea:focus,
+.dark select:focus,
+.dark a:focus {
+  outline-color: #38bdf8;
+}
+
+/* ==========================================
+   DEVELOPER MODE STYLES
+   ========================================== */
+
+/* Developer mode metadata can have smooth show/hide */
+.message-metadata {
+  transition: opacity 0.2s ease, max-height 0.2s ease !important;
+}
+
+.message-metadata.hidden {
+  opacity: 0;
+  max-height: 0;
+  overflow: hidden;
+  margin-top: 0 !important;
+  padding-top: 0 !important;
+  border-top: none !important;
+}
+
+/* Developer mode toggle animations */
+#developer-mode-toggle {
+  transition: background-color 0.15s ease !important;
+}
+
+#developer-mode-indicator {
+  transition: transform 0.15s ease !important;
+}
+
+#developer-mode-icon {
+  transition: color 0.15s ease !important;
+}
+
+/* ==========================================
+   INTERACTIVE ANIMATIONS
+   Keep smooth animations for user interactions
+   ========================================== */
+
+/* Button hover effects */
+.btn-hover {
+  transition: transform 0.1s ease, box-shadow 0.1s ease !important;
+}
+
+.btn-hover:hover {
+  transform: translateY(-1px);
+}
+
+.btn-hover:active {
+  transform: translateY(0);
+}
+
+/* Modal and dropdown animations */
+.fade-in {
+  animation: fadeIn 0.15s ease-out !important;
+}
+
+.fade-out {
+  animation: fadeOut 0.15s ease-in !important;
+}
+
+.slide-down {
+  animation: slideDown 0.2s ease-out !important;
+}
+
+.slide-up {
+  animation: slideUp 0.2s ease-in !important;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes fadeOut {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+}
+
+/* ==========================================
+   ACCESSIBILITY
+   ========================================== */
+
+/* Respect user's motion preferences */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+
+  html {
+    scroll-behavior: auto;
+  }
+}
+
+/* ==========================================
+   PRINT STYLES
+   ========================================== */
+
+@media print {
+  /* Ensure readable print output regardless of theme */
+  * {
+    background: white !important;
+    color: black !important;
+    box-shadow: none !important;
+    transition: none !important;
+    animation: none !important;
+  }
+
+  .dark * {
+    background: white !important;
+    color: black !important;
+  }
+}
+
+/* Avatar Styling Fixes - Add to your style.css */
+
+/* Ensure avatars maintain proper sizing and don't break during animations */
+.avatar-container {
+  flex-shrink: 0;
+  width: 2.5rem;
+  height: 2.5rem;
+  position: relative;
+}
+
+.avatar-circle {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  overflow: hidden;
+}
+
+/* Ensure SVG icons stay centered and don't break */
+.avatar-circle svg {
+  width: 1.25rem;
+  height: 1.25rem;
+  flex-shrink: 0;
+  position: relative;
+  z-index: 1;
+}
+
+/* Typing indicator specific fixes */
+#typing-indicator .avatar-circle {
+  background-color: #6b7280;
+}
+
+#typing-indicator .avatar-circle svg {
+  color: white;
+}
+
+/* Smooth fade-in animation for typing indicator */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.3s ease-out;
+}
+
+/* Ensure proper message container styling */
+.messages-container {
+  scroll-behavior: smooth;
+}
+
+/* Fix for dark mode typing dots */
+.dark #typing-indicator .animate-bounce {
+  background-color: #9ca3af;
+}
+
+/* Prevent layout shifts during typing animation */
+#typing-indicator {
+  min-height: 60px;
+}
