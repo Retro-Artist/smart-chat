@@ -1,17 +1,20 @@
 <?php
-// src/Web/Controllers/WhatsAppController.php
+// src/Web/Controllers/WhatsAppController.php - FINAL CLEAN VERSION
 
 require_once __DIR__ . '/../../Core/Helpers.php';
+require_once __DIR__ . '/../../Core/Database.php';
 require_once __DIR__ . '/../Models/WhatsAppInstance.php';
 require_once __DIR__ . '/../../Api/EvolutionAPI/WebhookHandler.php';
 
 class WhatsAppController
 {
     private $whatsappInstance;
+    private $db;
 
     public function __construct()
     {
         $this->whatsappInstance = new WhatsAppInstance();
+        $this->db = Database::getInstance();
     }
 
     /**
@@ -19,18 +22,14 @@ class WhatsAppController
      */
     public function connect()
     {
-        // Check if user is logged in
         Helpers::requireWebAuth();
         
         $userId = Helpers::getCurrentUserId();
         
-        // Check if user already has an active instance
+        // Use ONLY existing methods
         $existingInstance = $this->whatsappInstance->getUserActiveInstance($userId);
-        
-        // Get all user instances
         $allInstances = $this->whatsappInstance->getUserInstances($userId);
         
-        // Load QR connection view
         Helpers::loadView('whatsapp-connect', [
             'pageTitle' => 'Connect WhatsApp - Smart Chat',
             'existingInstance' => $existingInstance,
@@ -47,7 +46,7 @@ class WhatsAppController
         
         $userId = Helpers::getCurrentUserId();
         
-        // Create instance
+        // Use existing create method
         $result = $this->whatsappInstance->create($userId);
         
         if ($result['success']) {
@@ -74,7 +73,7 @@ class WhatsAppController
             Helpers::jsonError('Instance name required', 400);
         }
 
-        // Verify ownership
+        // Verify ownership using existing findByName method
         $userId = Helpers::getCurrentUserId();
         $instance = $this->whatsappInstance->findByName($instanceName);
         
@@ -82,7 +81,7 @@ class WhatsAppController
             Helpers::jsonError('Instance not found or access denied', 404);
         }
 
-        // Get QR code
+        // Use existing getQRCode method
         $result = $this->whatsappInstance->getQRCode($instanceName);
         
         if ($result['success']) {
@@ -105,7 +104,7 @@ class WhatsAppController
             Helpers::jsonError('Instance name required', 400);
         }
 
-        // Verify ownership
+        // Verify ownership using existing method
         $userId = Helpers::getCurrentUserId();
         $instance = $this->whatsappInstance->findByName($instanceName);
         
@@ -113,13 +112,18 @@ class WhatsAppController
             Helpers::jsonError('Instance not found or access denied', 404);
         }
 
-        // Get status
+        // Use existing getConnectionStatus method
         $result = $this->whatsappInstance->getConnectionStatus($instanceName);
         
         if ($result['success']) {
-            // Include instance stats
-            $stats = $this->whatsappInstance->getStats($instance['id']);
-            $result['stats'] = $stats;
+            // Add basic stats from the instance data itself
+            $result['stats'] = [
+                'instance_id' => $instance['id'],
+                'created_at' => $instance['created_at'],
+                'last_seen' => $instance['last_seen'],
+                'phone_number' => $instance['phone_number'],
+                'profile_name' => $instance['profile_name']
+            ];
             
             Helpers::jsonResponse($result);
         } else {
@@ -140,7 +144,7 @@ class WhatsAppController
         $userId = Helpers::getCurrentUserId();
         $instanceName = $input['instance_name'];
 
-        // Delete instance
+        // Use existing delete method
         $result = $this->whatsappInstance->delete($instanceName, $userId);
         
         if ($result['success']) {
@@ -163,13 +167,13 @@ class WhatsAppController
         $userId = Helpers::getCurrentUserId();
         $instanceName = $input['instance_name'];
 
-        // Verify ownership
+        // Verify ownership first
         $instance = $this->whatsappInstance->findByName($instanceName);
         if (!$instance || $instance['user_id'] != $userId) {
             Helpers::jsonError('Instance not found or access denied', 404);
         }
 
-        // Restart instance
+        // Use existing restart method
         $result = $this->whatsappInstance->restart($instanceName);
         
         if ($result['success']) {
@@ -180,27 +184,33 @@ class WhatsAppController
     }
 
     /**
-     * Update instance settings
+     * Update instance settings - Using direct database update
      */
     public function updateSettings()
     {
         Helpers::requireWebAuth();
         
         $input = Helpers::getJsonInput();
-        Helpers::validateRequired($input, ['instance_id', 'settings']);
+        Helpers::validateRequired($input, ['instance_name', 'settings']);
         
         $userId = Helpers::getCurrentUserId();
-        $instanceId = $input['instance_id'];
-        $settings = $input['settings'];
+        $instanceName = $input['instance_name'];
+        $newSettings = $input['settings'];
 
         // Verify ownership
-        $instance = $this->whatsappInstance->findById($instanceId);
+        $instance = $this->whatsappInstance->findByName($instanceName);
         if (!$instance || $instance['user_id'] != $userId) {
             Helpers::jsonError('Instance not found or access denied', 404);
         }
 
-        // Update settings
-        $result = $this->whatsappInstance->updateSettings($instanceId, $settings);
+        // Merge settings with existing ones
+        $currentSettings = json_decode($instance['settings'] ?? '{}', true);
+        $updatedSettings = array_merge($currentSettings, $newSettings);
+
+        // Update using existing updateByName method
+        $result = $this->whatsappInstance->updateByName($instanceName, [
+            'settings' => json_encode($updatedSettings)
+        ]);
         
         if ($result) {
             Helpers::jsonResponse([
@@ -213,97 +223,10 @@ class WhatsAppController
     }
 
     /**
-     * Get instance list for user
-     */
-    public function listInstances()
-    {
-        Helpers::requireWebAuth();
-        
-        $userId = Helpers::getCurrentUserId();
-        $instances = $this->whatsappInstance->getUserInstances($userId);
-        
-        // Add stats to each instance
-        foreach ($instances as &$instance) {
-            $instance['stats'] = $this->whatsappInstance->getStats($instance['id']);
-        }
-        
-        Helpers::jsonResponse([
-            'success' => true,
-            'instances' => $instances
-        ]);
-    }
-
-    /**
-     * Handle Evolution API webhooks
-     */
-    public function webhook()
-    {
-        try {
-            // Get webhook data
-            $input = file_get_contents('php://input');
-            $data = json_decode($input, true);
-            
-            if (!$data) {
-                http_response_code(400);
-                echo json_encode(['error' => 'Invalid JSON']);
-                return;
-            }
-
-            // Handle webhook
-            $webhookHandler = new WebhookHandler();
-            $result = $webhookHandler->handle($data);
-            
-            // Return response
-            http_response_code($result['success'] ? 200 : 500);
-            echo json_encode($result);
-            
-        } catch (Exception $e) {
-            error_log("Webhook error: " . $e->getMessage());
-            http_response_code(500);
-            echo json_encode([
-                'success' => false,
-                'error' => 'Internal server error'
-            ]);
-        }
-    }
-
-    /**
-     * Dashboard widget for WhatsApp status
-     */
-    public function dashboardWidget()
-    {
-        Helpers::requireWebAuth();
-        
-        $userId = Helpers::getCurrentUserId();
-        
-        // Get active instance
-        $activeInstance = $this->whatsappInstance->getUserActiveInstance($userId);
-        
-        $widgetData = [
-            'connected' => false,
-            'instance' => null,
-            'stats' => null
-        ];
-        
-        if ($activeInstance) {
-            $widgetData['connected'] = $activeInstance['status'] === 'connected';
-            $widgetData['instance'] = $activeInstance;
-            $widgetData['stats'] = $this->whatsappInstance->getStats($activeInstance['id']);
-        }
-        
-        Helpers::jsonResponse([
-            'success' => true,
-            'widget' => $widgetData
-        ]);
-    }
-
-    /**
-     * Test connection to Evolution API
+     * Test Evolution API connection
      */
     public function testConnection()
     {
-        Helpers::requireWebAuth();
-        
         try {
             $config = require __DIR__ . '/../../../config/config.php';
             
@@ -317,24 +240,52 @@ class WhatsAppController
             
             $result = $api->getInformation();
             
-            Helpers::jsonResponse([
-                'success' => $result['success'],
-                'api_status' => $result['success'] ? 'connected' : 'disconnected',
-                'api_info' => $result['data'] ?? null,
-                'error' => $result['error'] ?? null
-            ]);
+            if ($result['success']) {
+                Helpers::jsonResponse([
+                    'success' => true,
+                    'api_status' => 'connected',
+                    'api_info' => $result['data'] ?? null,
+                    'message' => 'Evolution API connection successful'
+                ]);
+            } else {
+                Helpers::jsonResponse([
+                    'success' => false,
+                    'api_status' => 'disconnected',
+                    'error' => $result['error'] ?? 'Unknown error',
+                    'message' => 'Evolution API connection failed'
+                ]);
+            }
             
         } catch (Exception $e) {
             Helpers::jsonResponse([
                 'success' => false,
                 'api_status' => 'error',
-                'error' => $e->getMessage()
+                'error' => $e->getMessage(),
+                'message' => 'Evolution API connection error'
             ]);
         }
     }
 
     /**
-     * Get WhatsApp contacts for user
+     * List user instances
+     */
+    public function listInstances()
+    {
+        Helpers::requireWebAuth();
+        
+        $userId = Helpers::getCurrentUserId();
+        
+        // Use existing method
+        $instances = $this->whatsappInstance->getUserInstances($userId);
+        
+        Helpers::jsonResponse([
+            'success' => true,
+            'instances' => $instances
+        ]);
+    }
+
+    /**
+     * Get WhatsApp contacts
      */
     public function getContacts()
     {
@@ -342,9 +293,8 @@ class WhatsAppController
         
         $userId = Helpers::getCurrentUserId();
         
-        // Get threads that are WhatsApp contacts
-        $db = Database::getInstance();
-        $contacts = $db->fetchAll("
+        // Direct database query since no specific method exists
+        $contacts = $this->db->fetchAll("
             SELECT 
                 t.id as thread_id,
                 t.whatsapp_contact_jid,
@@ -368,54 +318,101 @@ class WhatsAppController
     }
 
     /**
-     * Toggle AI auto-response for specific contact
+     * Toggle auto-response
      */
     public function toggleAutoResponse()
     {
         Helpers::requireWebAuth();
         
         $input = Helpers::getJsonInput();
-        Helpers::validateRequired($input, ['thread_id', 'auto_respond']);
+        Helpers::validateRequired($input, ['instance_name', 'auto_respond']);
         
         $userId = Helpers::getCurrentUserId();
-        $threadId = $input['thread_id'];
+        $instanceName = $input['instance_name'];
         $autoRespond = (bool)$input['auto_respond'];
 
-        // Verify thread ownership
-        if (!Thread::belongsToUser($threadId, $userId)) {
-            Helpers::jsonError('Thread not found or access denied', 404);
+        // Verify ownership
+        $instance = $this->whatsappInstance->findByName($instanceName);
+        if (!$instance || $instance['user_id'] != $userId) {
+            Helpers::jsonError('Instance not found or access denied', 404);
         }
 
-        // Get thread info
-        $thread = Thread::findById($threadId);
-        if (!$thread || !$thread['is_whatsapp_thread']) {
-            Helpers::jsonError('Not a WhatsApp thread', 400);
-        }
+        // Update settings using existing method
+        $currentSettings = json_decode($instance['settings'] ?? '{}', true);
+        $currentSettings['auto_respond'] = $autoRespond;
 
-        // Update or create routing rule
-        $db = Database::getInstance();
-        $existing = $db->fetch(
-            "SELECT id FROM conversation_routing WHERE instance_id = ? AND contact_jid = ?",
-            [$thread['whatsapp_instance_id'], $thread['whatsapp_contact_jid']]
-        );
+        $result = $this->whatsappInstance->updateByName($instanceName, [
+            'settings' => json_encode($currentSettings)
+        ]);
 
-        if ($existing) {
-            $db->update('conversation_routing', [
-                'auto_respond' => $autoRespond,
-                'updated_at' => date('Y-m-d H:i:s')
-            ], 'id = ?', [$existing['id']]);
-        } else {
-            $db->insert('conversation_routing', [
-                'instance_id' => $thread['whatsapp_instance_id'],
-                'contact_jid' => $thread['whatsapp_contact_jid'],
-                'auto_respond' => $autoRespond,
-                'created_at' => date('Y-m-d H:i:s')
+        if ($result) {
+            Helpers::jsonResponse([
+                'success' => true,
+                'message' => 'Auto-response setting updated'
             ]);
+        } else {
+            Helpers::jsonError('Failed to update setting', 500);
         }
+    }
 
+    /**
+     * Dashboard widget data
+     */
+    public function dashboardWidget()
+    {
+        Helpers::requireWebAuth();
+        
+        $userId = Helpers::getCurrentUserId();
+        
+        // Use existing methods
+        $activeInstance = $this->whatsappInstance->getUserActiveInstance($userId);
+        $allInstances = $this->whatsappInstance->getUserInstances($userId);
+        
+        // Count contacts directly from database
+        $totalContacts = $this->db->fetch(
+            "SELECT COUNT(*) as count FROM threads WHERE user_id = ? AND is_whatsapp_thread = 1",
+            [$userId]
+        )['count'] ?? 0;
+        
         Helpers::jsonResponse([
             'success' => true,
-            'message' => 'Auto-response setting updated'
+            'data' => [
+                'active_instances' => count(array_filter($allInstances, fn($i) => $i['status'] === 'connected')),
+                'total_instances' => count($allInstances),
+                'total_contacts' => $totalContacts,
+                'active_instance' => $activeInstance
+            ]
         ]);
+    }
+
+    /**
+     * Webhook handler
+     */
+    public function webhook()
+    {
+        // Get webhook data
+        $input = file_get_contents('php://input');
+        $data = json_decode($input, true);
+        
+        if (!$data) {
+            http_response_code(400);
+            echo json_encode(['error' => 'Invalid JSON']);
+            return;
+        }
+        
+        try {
+            $handler = new WebhookHandler();
+            $result = $handler->handle($data);
+            
+            http_response_code($result['success'] ? 200 : 500);
+            echo json_encode($result);
+            
+        } catch (Exception $e) {
+            http_response_code(500);
+            echo json_encode([
+                'success' => false,
+                'error' => 'Internal server error'
+            ]);
+        }
     }
 }
