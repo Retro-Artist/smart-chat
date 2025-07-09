@@ -188,30 +188,25 @@ class Instances {
         return $instances;
     }
     
-    /**
-     * Create instance with basic configuration
+/**
+     * Create Basic Instance (simplified version)
      * 
      * @param string $instanceName Name of the instance
-     * @param string $token Optional token for the instance
-     * @param string $number Optional phone number
-     * @param bool $qrcode Whether to enable QR code (default: true)
      * @return array Response data
      */
-    public function createBasicInstance($instanceName, $token = null, $number = null, $qrcode = true) {
-        $options = [
-            'qrcode' => $qrcode,
-            'integration' => 'WHATSAPP-BAILEYS'
+    public function createBasicInstance($instanceName) {
+        $data = [
+            'instanceName' => $instanceName,
+            'qrcode' => true,
+            'integration' => 'WHATSAPP-BAILEYS',
+            'rejectCall' => true,
+            'alwaysOnline' => true,
+            'readMessages' => false,
+            'readStatus' => false,
+            'syncFullHistory' => true
         ];
         
-        if ($token) {
-            $options['token'] = $token;
-        }
-        
-        if ($number) {
-            $options['number'] = $number;
-        }
-        
-        return $this->createInstance($instanceName, $options);
+        return $this->api->makeRequest("instance/create", $data, 'POST');
     }
     
     /**

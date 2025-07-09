@@ -44,6 +44,7 @@ $router->addWebRoute('GET', '/logout', 'AuthController@logout');
 
 // NEW: WhatsApp routes
 $router->addWebRoute('GET', '/whatsapp/connect', 'WhatsAppController@connect');
+$router->addWebRoute('POST', '/whatsapp/connect', 'WhatsAppController@connect'); // ADD THIS LINE
 
 // ===================================
 // API ROUTES (JSON Responses)
@@ -71,8 +72,10 @@ $router->addApiRoute('POST', '/api/tools/{name}/execute', 'ToolsAPI@executeTool'
 $router->addApiRoute('GET', '/api/system/status', 'SystemAPI@getStatus');
 $router->addApiRoute('GET', '/api/system/config', 'SystemAPI@getConfig');
 
+// Add these routes to your public/index.php file in the API ROUTES section:
+
 // ===================================
-// NEW: WHATSAPP API ROUTES
+// WHATSAPP API ROUTES (Complete)
 // ===================================
 
 // Instance Management
@@ -96,6 +99,7 @@ $router->addApiRoute('GET', '/api/whatsapp/dashboard-widget', 'WhatsAppControlle
 
 // Webhook Endpoint (receives Evolution API webhooks)
 $router->addApiRoute('POST', '/api/whatsapp/webhook', 'WhatsAppController@webhook');
+
 
 // ===================================
 // HANDLE REQUEST

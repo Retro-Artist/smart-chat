@@ -18,87 +18,119 @@ class WhatsAppInstance
     }
 
 /**
-     * Get QR code for instance connection - OPTIMIZED VERSION
-     */
-    public function getQRCode($instanceName)
-    {
-        try {
-            $api = new EvolutionAPI(
-                $this->config['evolutionAPI']['api_url'],
-                $this->config['evolutionAPI']['api_key'],
-                $instanceName
-            );
+ * Get QR code for instance connection - Updated for Evolution API v2.3.0
+ */
+public function getQRCode($instanceName)
+{
+    try {
+        $api = new EvolutionAPI(
+            $this->config['evolutionAPI']['api_url'],
+            $this->config['evolutionAPI']['api_key'],
+            $instanceName
+        );
 
-            $instances = new Instances($api);
-            $qrData = $instances->instanceConnect($instanceName);
+        $instances = new Instances($api);
+        $qrData = $instances->instanceConnect($instanceName);
 
-            if ($qrData['success'] && isset($qrData['data'])) {
-                // Evolution API v2.3.0+ returns both formats
-                $rawQrCode = $qrData['data']['code'] ?? null;
-                $base64QrCode = $qrData['data']['base64'] ?? null;
-                $pairingCode = $qrData['data']['pairingCode'] ?? null;
-                
-                $qrCodeDataUri = null;
-                
-                // Priority: Use the ready-made base64 if available, otherwise convert raw code
-                if ($base64QrCode) {
-                    $qrCodeDataUri = $base64QrCode;
-                } elseif ($rawQrCode) {
-                    // Fallback: Convert raw QR code to data URI
-                    $qrCodeDataUri = $this->convertQrCodeToDataUri($rawQrCode);
+        if ($qrData['success']) {
+            // Evolution API can return data in different formats
+            $data = $qrData['data'] ?? [];
+            
+            // Debug logging
+            error_log('Evolution API QR Response: ' . json_encode($data));
+            
+            // Check for different response formats from Evolution API
+            // Format 1: Direct response with base64 field
+            if (isset($data['base64'])) {
+                $qrCodeDataUri = $data['base64'];
+                // Ensure it has the data URI prefix
+                if (strpos($qrCodeDataUri, 'data:image/') !== 0) {
+                    $qrCodeDataUri = 'data:image/png;base64,' . $qrCodeDataUri;
                 }
                 
-                if ($qrCodeDataUri) {
-                    // Update QR code in database (store the raw code for reference)
-                    $this->updateByName($instanceName, [
-                        'qr_code' => $rawQrCode,
-                        'status' => 'connecting'
-                    ]);
-                }
-
                 return [
                     'success' => true,
-                    'qr_code' => $qrCodeDataUri, // Return ready-to-display data URI
-                    'raw_qr_code' => $rawQrCode,
-                    'pairing_code' => $pairingCode,
-                    'data' => $qrData['data']
+                    'qr_code' => $qrCodeDataUri,
+                    'pairing_code' => $data['pairingCode'] ?? null,
+                    'count' => $data['count'] ?? 1,
+                    'raw_qr_code' => $data['code'] ?? null
                 ];
             }
-
-            return $qrData;
-
-        } catch (Exception $e) {
+            
+            // Format 2: Response with qr field (some versions)
+            if (isset($data['qr'])) {
+                $qrCodeDataUri = $data['qr'];
+                // Ensure it has the data URI prefix
+                if (strpos($qrCodeDataUri, 'data:image/') !== 0) {
+                    $qrCodeDataUri = 'data:image/png;base64,' . $qrCodeDataUri;
+                }
+                
+                return [
+                    'success' => true,
+                    'qr_code' => $qrCodeDataUri,
+                    'pairing_code' => $data['pairingCode'] ?? null,
+                    'count' => $data['count'] ?? 1,
+                    'raw_qr_code' => $data['code'] ?? null
+                ];
+            }
+            
+            // Format 3: Response with qrcode field
+            if (isset($data['qrcode'])) {
+                $qrCodeDataUri = $data['qrcode'];
+                // Ensure it has the data URI prefix
+                if (strpos($qrCodeDataUri, 'data:image/') !== 0) {
+                    $qrCodeDataUri = 'data:image/png;base64,' . $qrCodeDataUri;
+                }
+                
+                return [
+                    'success' => true,
+                    'qr_code' => $qrCodeDataUri,
+                    'pairing_code' => $data['pairingCode'] ?? null,
+                    'count' => $data['count'] ?? 1,
+                    'raw_qr_code' => $data['code'] ?? null
+                ];
+            }
+            
+            // Check if count is 0 (no QR code available)
+            if (isset($data['count']) && $data['count'] == 0) {
+                return [
+                    'success' => false,
+                    'error' => 'QR code not ready yet. Instance may already be connected.',
+                    'data' => $data
+                ];
+            }
+            
+            // If we reach here, no QR code was found in expected fields
             return [
                 'success' => false,
-                'error' => $e->getMessage()
+                'error' => 'QR code not found in API response',
+                'debug_data' => $data,
+                'debug_fields' => array_keys($data)
             ];
         }
+
+        return [
+            'success' => false,
+            'error' => $qrData['error'] ?? 'Failed to get QR code'
+        ];
+
+    } catch (Exception $e) {
+        return [
+            'success' => false,
+            'error' => $e->getMessage()
+        ];
     }
+}
 
     /**
-     * Convert raw QR code to base64 data URI for image display
+     * Generate QR code image from raw code data
      */
-    private function convertQrCodeToDataUri($rawQrCode)
+    private function generateQRCodeImage($rawQrCode)
     {
-        try {
-            // Check if it's already a base64 encoded image
-            if (strpos($rawQrCode, 'data:image/') === 0) {
-                return $rawQrCode;
-            }
-
-            // If it's just base64 data, create proper data URI
-            if (base64_decode($rawQrCode, true) !== false) {
-                return 'data:image/png;base64,' . $rawQrCode;
-            }
-
-            // For other formats, try to generate QR code using a simple approach
-            // This is a fallback - in most cases the API should return base64
-            return 'data:image/png;base64,' . base64_encode($rawQrCode);
-
-        } catch (Exception $e) {
-            // If conversion fails, return null
-            return null;
-        }
+        // This method should not be needed since Evolution API provides the QR code
+        // If we reach here, it means the API response format has changed
+        error_log('Warning: Evolution API did not provide base64 QR code, raw code: ' . substr($rawQrCode, 0, 50) . '...');
+        return null;
     }
 
     /**
@@ -119,20 +151,20 @@ class WhatsAppInstance
             if ($statusData['success'] && isset($statusData['data']['instance'])) {
                 $instanceData = $statusData['data']['instance'];
                 $state = $instanceData['state'] ?? 'disconnected';
-                
+
                 // Map Evolution API states to our status
                 $statusMap = [
                     'open' => 'connected',
-                    'close' => 'disconnected', 
+                    'close' => 'disconnected',
                     'connecting' => 'connecting',
                     'qr' => 'connecting'
                 ];
-                
+
                 $status = $statusMap[$state] ?? 'disconnected';
-                
+
                 // Prepare update data
                 $updateData = ['status' => $status];
-                
+
                 // If connected, extract profile information and clear QR code
                 if ($state === 'open') {
                     $updateData['phone_number'] = $instanceData['wuid'] ?? null;
@@ -155,10 +187,31 @@ class WhatsAppInstance
                         'profile_name' => $updateData['profile_name'] ?? null
                     ]
                 ];
+            } else if (!$statusData['success']) {
+                // Instance not found in Evolution API or other error
+                $errorMessage = $statusData['error'] ?? 'Unknown error';
+                
+                // Check if it's a "not found" error
+                if (stripos($errorMessage, 'not found') !== false || 
+                    stripos($errorMessage, '404') !== false ||
+                    (isset($statusData['http_code']) && $statusData['http_code'] == 404)) {
+                    
+                    // Mark instance as deleted/missing
+                    $this->updateByName($instanceName, [
+                        'status' => 'deleted',
+                        'updated_at' => date('Y-m-d H:i:s')
+                    ]);
+                    
+                    return [
+                        'success' => false,
+                        'status' => 'deleted',
+                        'error' => 'Instance not found in Evolution API. It may have been deleted externally.',
+                        'deleted' => true
+                    ];
+                }
             }
 
             return $statusData;
-
         } catch (Exception $e) {
             return [
                 'success' => false,
@@ -167,7 +220,7 @@ class WhatsAppInstance
         }
     }
 
-/**
+    /**
      * Create a new WhatsApp instance for user - FIXED TO MATCH WORKING PATTERN
      */
     public function create($userId, $instanceName = null)
@@ -191,7 +244,7 @@ class WhatsAppInstance
             );
 
             $instances = new Instances($api);
-            
+
             // Use createBasicInstance method (same as working instance-management.php)
             $instanceData = $instances->createBasicInstance($instanceName);
 
@@ -219,7 +272,6 @@ class WhatsAppInstance
                 'instance_name' => $instanceName,
                 'data' => $instanceData['data'] ?? []
             ];
-
         } catch (Exception $e) {
             return [
                 'success' => false,
@@ -259,7 +311,7 @@ class WhatsAppInstance
     public function getUserActiveInstance($userId)
     {
         return $this->db->fetch(
-            "SELECT * FROM whatsapp_instances WHERE user_id = ? AND status IN ('connected', 'connecting') ORDER BY created_at DESC LIMIT 1",
+            "SELECT * FROM whatsapp_instances WHERE user_id = ? AND status IN ('connected', 'connecting', 'deleted') ORDER BY created_at DESC LIMIT 1",
             [$userId]
         );
     }
@@ -301,7 +353,6 @@ class WhatsAppInstance
                     $setting => $value
                 ], 'PUT');
             }
-
         } catch (Exception $e) {
             // Log error but don't fail instance creation
             error_log("Failed to configure instance settings: " . $e->getMessage());
@@ -338,7 +389,6 @@ class WhatsAppInstance
                 'success' => true,
                 'api_result' => $result
             ];
-
         } catch (Exception $e) {
             return [
                 'success' => false,
@@ -379,7 +429,6 @@ class WhatsAppInstance
             }
 
             return $result;
-
         } catch (Exception $e) {
             return [
                 'success' => false,
