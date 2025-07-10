@@ -3,7 +3,7 @@
 
 require_once __DIR__ . '/../../Core/Helpers.php';
 require_once __DIR__ . '/../../Core/Security.php';
-require_once __DIR__ . '/../Models/User.php';
+require_once __DIR__ . '/../../Api/Models/User.php';
 
 class AuthController {
     
@@ -90,7 +90,7 @@ class AuthController {
         } elseif ($password !== $confirmPassword) {
             $error = 'Passwords do not match';
         } elseif (!Security::isValidPassword($password)) {
-            $error = 'Password must be at least 6 characters';
+            $error = Security::getPasswordRequirements();
         } elseif (!Security::isValidEmail($email)) {
             $error = 'Invalid email format';
         } else {

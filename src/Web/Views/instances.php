@@ -185,7 +185,7 @@ $activeInstance = $whatsappInstance->getUserActiveInstance($userId);
                                     <p class="text-xs text-gray-500 dark:text-gray-400 capitalize">
                                         <?= htmlspecialchars($instance['status']) ?>
                                         <?php if ($instance['phone_number']): ?>
-                                            | <?= htmlspecialchars($instance['phone_number']) ?>
+                                            | <?= Security::maskPhoneNumber($instance['phone_number']) ?>
                                         <?php endif; ?>
                                     </p>
                                 </div>

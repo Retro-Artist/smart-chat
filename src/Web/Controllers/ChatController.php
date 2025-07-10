@@ -18,9 +18,9 @@ class ChatController {
         
         // Determine current thread
         $currentThread = null;
-        $requestedThreadId = $_GET['thread'] ?? null;
+        $requestedThreadId = filter_var($_GET['thread'] ?? null, FILTER_VALIDATE_INT);
         
-        if ($requestedThreadId && is_numeric($requestedThreadId)) {
+        if ($requestedThreadId !== false && $requestedThreadId > 0) {
             // User clicked on a specific thread
             $requestedThread = Thread::findById($requestedThreadId);
             
@@ -50,10 +50,11 @@ class ChatController {
         
         // Check if a specific agent was requested via URL parameter
         $selectedAgentId = null;
-        if (isset($_GET['agent']) && is_numeric($_GET['agent'])) {
-            $requestedAgent = Agent::findById($_GET['agent']);
+        $agentId = filter_var($_GET['agent'] ?? null, FILTER_VALIDATE_INT);
+        if ($agentId !== false && $agentId > 0) {
+            $requestedAgent = Agent::findById($agentId);
             if ($requestedAgent && $requestedAgent->getUserId() == $userId) {
-                $selectedAgentId = $_GET['agent'];
+                $selectedAgentId = $agentId;
             }
         }
         
