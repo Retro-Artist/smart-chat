@@ -72,8 +72,6 @@ $router->addApiRoute('POST', '/api/tools/{name}/execute', 'ToolsAPI@executeTool'
 $router->addApiRoute('GET', '/api/system/status', 'SystemAPI@getStatus');
 $router->addApiRoute('GET', '/api/system/config', 'SystemAPI@getConfig');
 
-// Add these routes to your public/index.php file in the API ROUTES section:
-
 // ===================================
 // WHATSAPP API ROUTES (Complete)
 // ===================================
@@ -96,9 +94,6 @@ $router->addApiRoute('POST', '/api/whatsapp/toggle-auto-response', 'WhatsAppCont
 // Contacts & Conversations
 $router->addApiRoute('GET', '/api/whatsapp/contacts', 'WhatsAppController@getContacts');
 $router->addApiRoute('GET', '/api/whatsapp/dashboard-widget', 'WhatsAppController@dashboardWidget');
-
-// Webhook Endpoint (receives Evolution API webhooks)
-$router->addApiRoute('POST', '/api/whatsapp/webhook', 'WhatsAppController@webhook');
 
 
 // ===================================
