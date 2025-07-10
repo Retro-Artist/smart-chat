@@ -761,12 +761,59 @@ ob_start();
       agentPerformanceChart = createAgentPerformanceChart();
     }
 
-    // Listen for theme changes and recreate charts
+    // Update chart colors on theme change without recreating charts
     function handleThemeChange() {
       // Small delay to ensure DOM has updated
       setTimeout(() => {
-        initCharts();
+        updateChartColors();
       }, 50);
+    }
+
+    // Update chart colors without reinitializing (prevents animation restart)
+    function updateChartColors() {
+      const colors = getChartColors();
+      
+      if (conversationsChart) {
+        // Update conversation chart colors
+        const dataset = conversationsChart.data.datasets[0];
+        dataset.borderColor = colors.primary;
+        dataset.backgroundColor = colors.primary + '20';
+        dataset.pointBackgroundColor = colors.primary;
+        dataset.pointBorderColor = colors.background;
+        dataset.pointHoverBackgroundColor = colors.primary;
+        dataset.pointHoverBorderColor = colors.background;
+        
+        // Update scales colors
+        conversationsChart.options.scales.x.ticks.color = colors.mutedText;
+        conversationsChart.options.scales.x.border.color = colors.borderColor;
+        conversationsChart.options.scales.y.ticks.color = colors.mutedText;
+        conversationsChart.options.scales.y.grid.color = colors.gridColor;
+        
+        // Update tooltip colors
+        conversationsChart.options.plugins.tooltip.backgroundColor = colors.tooltipBg;
+        conversationsChart.options.plugins.tooltip.titleColor = colors.text;
+        conversationsChart.options.plugins.tooltip.bodyColor = colors.text;
+        conversationsChart.options.plugins.tooltip.borderColor = colors.tooltipBorder;
+        
+        conversationsChart.update('none'); // Update without animation
+      }
+      
+      if (agentPerformanceChart) {
+        // Update agent performance chart colors
+        const dataset = agentPerformanceChart.data.datasets[0];
+        dataset.borderColor = colors.background;
+        
+        // Update legend colors
+        agentPerformanceChart.options.plugins.legend.labels.color = colors.text;
+        
+        // Update tooltip colors
+        agentPerformanceChart.options.plugins.tooltip.backgroundColor = colors.tooltipBg;
+        agentPerformanceChart.options.plugins.tooltip.titleColor = colors.text;
+        agentPerformanceChart.options.plugins.tooltip.bodyColor = colors.text;
+        agentPerformanceChart.options.plugins.tooltip.borderColor = colors.tooltipBorder;
+        
+        agentPerformanceChart.update('none'); // Update without animation
+      }
     }
 
     // Initialize charts on page load
