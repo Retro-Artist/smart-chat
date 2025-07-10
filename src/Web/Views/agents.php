@@ -638,7 +638,6 @@ ob_start();
                 setTimeout(() => window.location.reload(), 1000);
 
             } catch (error) {
-                console.error('Error creating agent:', error);
                 showToast('error', error.message || 'Failed to create agent. Please try again.');
                 submitBtn.disabled = false;
                 submitBtn.innerHTML = originalText;
@@ -693,7 +692,6 @@ ob_start();
                 setTimeout(() => window.location.reload(), 1000);
 
             } catch (error) {
-                console.error('Error updating agent:', error);
                 showToast('error', error.message || 'Failed to update agent. Please try again.');
                 submitBtn.disabled = false;
                 submitBtn.innerHTML = originalText;
@@ -759,7 +757,6 @@ ob_start();
             document.getElementById('edit-agent-name').focus();
 
         } catch (error) {
-            console.error('Error loading agent for editing:', error);
             showToast('error', 'Failed to load agent data for editing');
         }
     }
@@ -789,7 +786,6 @@ ob_start();
             setTimeout(() => window.location.reload(), 1000);
 
         } catch (error) {
-            console.error('Error deleting agent:', error);
             showToast('error', error.message || 'Failed to delete agent. Please try again.');
         }
     }

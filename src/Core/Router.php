@@ -74,8 +74,8 @@ class Router {
         
         // FIXED: Determine handler directory based on route type AND handler name
         if ($route['type'] === 'api') {
-            // Check if it's a WhatsApp controller (should be in Web/Controllers)
-            if (strpos($handlerName, 'WhatsApp') !== false) {
+            // Check if it's a WhatsApp/Instance controller (should be in Web/Controllers)
+            if (strpos($handlerName, 'WhatsApp') !== false || strpos($handlerName, 'Instance') !== false) {
                 $handlerFile = __DIR__ . "/../Web/Controllers/{$handlerName}.php";
             } else {
                 // Other API controllers are in Api/OpenAI

@@ -43,8 +43,8 @@ $router->addWebRoute('POST', '/register', 'AuthController@processRegister');
 $router->addWebRoute('GET', '/logout', 'AuthController@logout');
 
 // NEW: WhatsApp routes
-$router->addWebRoute('GET', '/whatsapp/connect', 'WhatsAppController@connect');
-$router->addWebRoute('POST', '/whatsapp/connect', 'WhatsAppController@connect'); // ADD THIS LINE
+$router->addWebRoute('GET', '/whatsapp/connect', 'InstanceController@connect');
+$router->addWebRoute('POST', '/whatsapp/connect', 'InstanceController@connect'); // ADD THIS LINE
 
 // ===================================
 // API ROUTES (JSON Responses)
@@ -77,23 +77,23 @@ $router->addApiRoute('GET', '/api/system/config', 'SystemAPI@getConfig');
 // ===================================
 
 // Instance Management
-$router->addApiRoute('POST', '/api/whatsapp/create-instance', 'WhatsAppController@createInstance');
-$router->addApiRoute('GET', '/api/whatsapp/instances', 'WhatsAppController@listInstances');
-$router->addApiRoute('DELETE', '/api/whatsapp/delete', 'WhatsAppController@deleteInstance');
-$router->addApiRoute('POST', '/api/whatsapp/restart', 'WhatsAppController@restartInstance');
+$router->addApiRoute('POST', '/api/whatsapp/create-instance', 'InstanceController@createInstance');
+$router->addApiRoute('GET', '/api/whatsapp/instances', 'InstanceController@listInstances');
+$router->addApiRoute('DELETE', '/api/whatsapp/delete', 'InstanceController@deleteInstance');
+$router->addApiRoute('POST', '/api/whatsapp/restart', 'InstanceController@restartInstance');
 
 // Connection Management
-$router->addApiRoute('GET', '/api/whatsapp/qr', 'WhatsAppController@getQRCode');
-$router->addApiRoute('GET', '/api/whatsapp/status', 'WhatsAppController@getStatus');
-$router->addApiRoute('GET', '/api/whatsapp/test-connection', 'WhatsAppController@testConnection');
+$router->addApiRoute('GET', '/api/whatsapp/qr', 'InstanceController@getQRCode');
+$router->addApiRoute('GET', '/api/whatsapp/status', 'InstanceController@getStatus');
+$router->addApiRoute('GET', '/api/whatsapp/test-connection', 'InstanceController@testConnection');
 
 // Settings & Configuration
-$router->addApiRoute('POST', '/api/whatsapp/settings', 'WhatsAppController@updateSettings');
-$router->addApiRoute('POST', '/api/whatsapp/toggle-auto-response', 'WhatsAppController@toggleAutoResponse');
+$router->addApiRoute('POST', '/api/whatsapp/settings', 'InstanceController@updateSettings');
+$router->addApiRoute('POST', '/api/whatsapp/toggle-auto-response', 'InstanceController@toggleAutoResponse');
 
 // Contacts & Conversations
-$router->addApiRoute('GET', '/api/whatsapp/contacts', 'WhatsAppController@getContacts');
-$router->addApiRoute('GET', '/api/whatsapp/dashboard-widget', 'WhatsAppController@dashboardWidget');
+$router->addApiRoute('GET', '/api/whatsapp/contacts', 'InstanceController@getContacts');
+$router->addApiRoute('GET', '/api/whatsapp/dashboard-widget', 'InstanceController@dashboardWidget');
 
 
 // ===================================

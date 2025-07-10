@@ -13,8 +13,11 @@ class SystemAPI {
         $this->loadConfig();
         
         if (empty($this->apiKey)) {
-            throw new Exception('OpenAI API key not configured');
+            error_log("SystemAPI: OpenAI API key not found. Checked env vars and config file.");
+            throw new Exception('OpenAI API key not configured. Please check your .env file or environment variables.');
         }
+        
+        error_log("SystemAPI: Initialized with model: {$this->model}, max_tokens: {$this->maxTokens}, temperature: {$this->temperature}");
     }
     
     private function loadConfig() {
@@ -24,15 +27,21 @@ class SystemAPI {
         $this->maxTokens = (int)(getenv('OPENAI_MAX_TOKENS') ?: 1024);
         $this->temperature = (float)(getenv('OPENAI_TEMPERATURE') ?: 0.7);
         
+        error_log("SystemAPI: Loading config - API key from env: " . (empty($this->apiKey) ? 'NOT FOUND' : 'FOUND'));
+        
         // Fallback to config file if needed
         if (empty($this->apiKey)) {
             try {
-                if (file_exists(__DIR__ . '/../../config/config.php')) {
-                    $config = require __DIR__ . '/../../config/config.php';
+                $configPath = __DIR__ . '/../../config/config.php';
+                if (file_exists($configPath)) {
+                    $config = require $configPath;
                     $this->apiKey = $config['openai']['api_key'] ?? '';
                     $this->model = $config['openai']['model'] ?? $this->model;
                     $this->maxTokens = $config['openai']['max_tokens'] ?? $this->maxTokens;
                     $this->temperature = $config['openai']['temperature'] ?? $this->temperature;
+                    error_log("SystemAPI: Config file loaded - API key from config: " . (empty($this->apiKey) ? 'NOT FOUND' : 'FOUND'));
+                } else {
+                    error_log("SystemAPI: Config file not found at: " . $configPath);
                 }
             } catch (Exception $e) {
                 error_log("Config file loading error: " . $e->getMessage());

@@ -1,12 +1,12 @@
 <?php
-// src/Web/Controllers/WhatsAppController.php - FINAL CLEAN VERSION
+// src/Web/Controllers/InstanceController.php - FINAL CLEAN VERSION
 
 require_once __DIR__ . '/../../Core/Helpers.php';
 require_once __DIR__ . '/../../Core/Database.php';
 require_once __DIR__ . '/../Models/WhatsAppInstance.php';
 require_once __DIR__ . '/../../Api/EvolutionAPI/WebhookHandler.php';
 
-class WhatsAppController
+class InstanceController
 {
     private $whatsappInstance;
     private $db;
@@ -59,7 +59,7 @@ class WhatsAppController
             $existingInstance = $this->whatsappInstance->getUserActiveInstance($userId);
         }
         
-        Helpers::loadView('whatsapp-connect', [
+        Helpers::loadView('instances', [
             'pageTitle' => 'Connect WhatsApp - Smart Chat',
             'existingInstance' => $existingInstance,
             'allInstances' => $allInstances

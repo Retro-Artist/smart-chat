@@ -1,5 +1,5 @@
 <?php
-// src/Web/Views/whatsapp-connect.php - REFACTORED WITH DYNAMIC CONNECTION CHECKING
+// src/Web/Views/instances.php - REFACTORED WITH DYNAMIC CONNECTION CHECKING
 // Following the same pattern as tests/instance-management.php
 
 ob_start();
@@ -240,34 +240,24 @@ function whatsappConnection() {
 
         init() {
             // Check if we're on the right environment
-            console.log('🚀 WhatsApp Connection Component Initialized');
-            console.log('Current URL:', window.location.href);
-            console.log('Instance name:', this.connectionStatus.instanceName);
             
             // Start checking connection status immediately if we have an instance
             <?php if ($currentInstance): ?>
-                console.log('Auto-starting polling for instance: <?= htmlspecialchars($currentInstance) ?>');
                 this.startPolling();
             <?php else: ?>
-                console.log('No current instance found, polling disabled');
             <?php endif; ?>
         },
 
         async checkConnectionStatus() {
             if (!this.connectionStatus.instanceName) {
-                console.log('❌ No instance name available');
                 return;
             }
 
             this.checkingStatus = true;
             
             try {
-                console.log('📡 Checking connection status for:', this.connectionStatus.instanceName);
-                console.log('🌐 Current page URL:', window.location.href);
-                
                 // Build the API URL - use relative path to avoid localhost issues
                 const apiUrl = `/api/whatsapp/status?instance=${encodeURIComponent(this.connectionStatus.instanceName)}`;
-                console.log('📞 API call URL:', apiUrl);
                 
                 const response = await fetch(apiUrl, {
                     method: 'GET',
@@ -277,22 +267,15 @@ function whatsappConnection() {
                     }
                 });
                 
-                console.log('📊 Response status:', response.status);
-                console.log('📊 Response headers:', [...response.headers.entries()]);
-                
                 let data;
                 const responseText = await response.text();
-                console.log('📊 Raw response:', responseText);
                 
                 try {
                     data = JSON.parse(responseText);
                 } catch (parseError) {
-                    console.error('❌ Failed to parse JSON:', parseError);
-                    console.error('❌ Response text:', responseText);
                     throw new Error('Invalid JSON response: ' + responseText.substring(0, 100));
                 }
                 
-                console.log('📊 Parsed response:', data);
                 
                 if (response.ok && data.success && data.data && data.data.instance) {
                     const instance = data.data.instance;
@@ -300,46 +283,31 @@ function whatsappConnection() {
                     this.connectionStatus.instanceName = instance.instanceName || this.connectionStatus.instanceName;
                     this.connectionStatus.checked = true;
                     
-                    console.log('✅ Connection state:', this.connectionStatus.state);
                     
                     // Handle different states - same logic as tests/instance-management.php
                     switch (this.connectionStatus.state) {
                         case 'open':
-                            console.log('🟢 Instance is CONNECTED and ready');
                             this.connectionStatus.connected = true;
                             this.stopPolling(); // Stop polling when connected
                             break;
                         case 'close':
                         case 'disconnected':
-                            console.log('🔴 Instance is DISCONNECTED');
                             this.connectionStatus.connected = false;
                             break;
                         case 'connecting':
-                            console.log('🟡 Instance is CONNECTING');
                             this.connectionStatus.connected = false;
                             break;
                         default:
-                            console.log('⚪ Instance state:', this.connectionStatus.state);
                             this.connectionStatus.connected = false;
                     }
                 } else {
-                    console.error('❌ API call failed or returned error');
-                    console.error('❌ Response status:', response.status);
-                    console.error('❌ Response data:', data);
-                    
                     const errorMsg = data?.error || `HTTP ${response.status}: ${response.statusText}`;
-                    console.error('❌ Error message:', errorMsg);
                     
                     this.connectionStatus.checked = true;
                     this.connectionStatus.state = 'error';
                 }
             } catch (error) {
-                console.error('❌ Network error checking connection status:', error);
-                console.error('❌ Error details:', {
-                    name: error.name,
-                    message: error.message,
-                    stack: error.stack
-                });
+                // Error occurred during connection check
                 this.connectionStatus.checked = true;
                 this.connectionStatus.state = 'error';
             } finally {
@@ -375,7 +343,6 @@ function whatsappConnection() {
             if (this.pollingInterval) {
                 clearInterval(this.pollingInterval);
                 this.pollingInterval = null;
-                console.log('🛑 Stopped polling connection status');
             }
         },
 

@@ -255,6 +255,28 @@ function chatApp() {
             const messageText = this.message.trim();
             this.isLoading = true;
             
+            // Create a thread if we don't have one
+            if (!this.currentThreadId) {
+                try {
+                    const response = await fetch('/api/threads', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ title: messageText.substring(0, 50) + '...' })
+                    });
+                    
+                    if (!response.ok) throw new Error('Failed to create thread');
+                    
+                    const thread = await response.json();
+                    this.currentThreadId = thread.id;
+                    // Update the URL without refreshing the page
+                    window.history.replaceState({}, '', `/chat?thread=${thread.id}`);
+                } catch (error) {
+                    this.addMessageToUI('assistant', 'Sorry, I could not create a new conversation. Please try again.');
+                    this.isLoading = false;
+                    return;
+                }
+            }
+            
             this.addMessageToUI('user', messageText);
             this.message = '';
             this.autoResize();
@@ -287,7 +309,6 @@ function chatApp() {
             } catch (error) {
                 this.hideTypingIndicator();
                 this.addMessageToUI('assistant', 'Sorry, I encountered an error. Please try again.');
-                console.error(error);
             } finally {
                 this.isLoading = false;
                 this.$refs.messageInput?.focus();
@@ -416,7 +437,6 @@ function chatApp() {
                 const thread = await response.json();
                 window.location.href = `/chat?thread=${thread.id}`;
             } catch (error) {
-                console.error(error);
             }
         },
 

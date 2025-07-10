@@ -11,7 +11,7 @@ $_SESSION['user_id'] = 1;
 // Load the same dependencies
 require_once __DIR__ . '/../src/Core/Database.php';
 require_once __DIR__ . '/../src/Core/Helpers.php';
-require_once __DIR__ . '/../src/Web/Controllers/WhatsappController.php';
+require_once __DIR__ . '/../src/Web/Controllers/InstanceController.php';
 
 echo "🔍 Debug API Endpoint Test\n";
 echo "============================\n\n";
@@ -24,9 +24,9 @@ echo "Testing: /api/whatsapp/status?instance=$instanceName\n\n";
 $_GET['instance'] = $instanceName;
 
 try {
-    $controller = new WhatsappController();
+    $controller = new InstanceController();
     
-    echo "1. Calling WhatsappController->getStatus()...\n";
+    echo "1. Calling InstanceController->getStatus()...\n";
     
     // Capture output
     ob_start();

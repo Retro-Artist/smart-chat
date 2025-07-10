@@ -14,14 +14,16 @@ ob_start();
   <script src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
   <script>
     // Suppress Tailwind production warning
-    const originalWarn = console.warn;
-    console.warn = function(...args) {
-      const message = args[0] ? args[0].toString() : "";
-      if (message.includes("tailwindcss.com should not be used in production")) {
-        return;
-      }
-      originalWarn.apply(console, args);
-    };
+    (function() {
+      const originalWarn = console.warn;
+      window.console.warn = function(...args) {
+        const message = args[0] ? args[0].toString() : "";
+        if (message.includes("tailwindcss.com should not be used in production")) {
+          return;
+        }
+        originalWarn.apply(console, args);
+      };
+    })();
 
     tailwind.config = {
       theme: {

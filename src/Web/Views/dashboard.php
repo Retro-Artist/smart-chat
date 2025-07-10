@@ -793,7 +793,6 @@ ob_start();
 
     // Utility function for period changes
     window.refreshCharts = function(period) {
-      console.log('Refreshing charts for period:', period);
       // TODO: Implement AJAX call to fetch new data for different periods
       // For now, just recreate with current data
       initCharts();
