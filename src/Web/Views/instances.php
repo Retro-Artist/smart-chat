@@ -7,7 +7,7 @@ ob_start();
 // Initialize dependencies - same as working tests
 require_once __DIR__ . '/../../Core/Database.php';
 require_once __DIR__ . '/../../Core/Helpers.php';
-require_once __DIR__ . '/../Models/WhatsAppInstance.php';
+require_once __DIR__ . '/../../Api/Models/WhatsappInstance.php';
 
 $userId = Helpers::getCurrentUserId();
 $whatsappInstance = new WhatsAppInstance();

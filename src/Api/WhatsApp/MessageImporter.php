@@ -1,10 +1,10 @@
 <?php
-// src/Api/EvolutionAPI/MessageImporter.php
+// src/Api/WhatsApp/MessageImporter.php
 
 require_once __DIR__ . '/../../Core/Database.php';
 require_once __DIR__ . '/../../Core/Logger.php';
 require_once __DIR__ . '/../Models/Thread.php';
-require_once __DIR__ . '/../Models/WhatsAppInstance.php';
+require_once __DIR__ . '/../Models/WhatsappInstance.php';
 
 class MessageImporter
 {

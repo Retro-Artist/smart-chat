@@ -7,10 +7,10 @@
  */
 
 // Load required classes
-require_once __DIR__ . '/../src/EvolutionAPI/EvolutionAPI.php';
-require_once __DIR__ . '/../src/EvolutionAPI/Instances.php';
-require_once __DIR__ . '/../src/EvolutionAPI/SendMessage.php';
-require_once __DIR__ . '/../src/EvolutionAPI/MediaHandler.php';
+require_once __DIR__ . '/../src/Api/WhatsApp/EvolutionAPI.php';
+require_once __DIR__ . '/../src/Api/WhatsApp/Instances.php';
+require_once __DIR__ . '/../src/Api/WhatsApp/SendMessage.php';
+require_once __DIR__ . '/../src/Api/WhatsApp/MediaHandler.php';
 
 $config = require_once __DIR__ . '/../config/config.php';
 

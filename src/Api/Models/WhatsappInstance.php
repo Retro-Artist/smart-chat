@@ -3,8 +3,8 @@
 
 require_once __DIR__ . '/../../Core/Database.php';
 require_once __DIR__ . '/../../Core/Helpers.php';
-require_once __DIR__ . '/../../Api/EvolutionAPI/EvolutionAPI.php';
-require_once __DIR__ . '/../../Api/EvolutionAPI/Instances.php';
+require_once __DIR__ . '/../../Api/WhatsApp/EvolutionAPI.php';
+require_once __DIR__ . '/../../Api/WhatsApp/Instances.php';
 
 class WhatsAppInstance
 {

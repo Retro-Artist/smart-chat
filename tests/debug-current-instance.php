@@ -10,7 +10,7 @@ $_SESSION['user_id'] = 1;
 // Load dependencies
 require_once __DIR__ . '/../src/Core/Database.php';
 require_once __DIR__ . '/../src/Core/Helpers.php';
-require_once __DIR__ . '/../src/Web/Models/WhatsAppInstance.php';
+require_once __DIR__ . '/../src/Api/Models/WhatsappInstance.php';
 
 echo "🔍 Debug Current Instance QR Code\n";
 echo "==================================\n\n";
@@ -92,8 +92,8 @@ try {
     echo "\n2️⃣ Testing direct Evolution API call...\n";
     
     // Test direct API call - Fix config loading
-    require_once __DIR__ . '/../src/Api/EvolutionAPI/EvolutionAPI.php';
-    require_once __DIR__ . '/../src/Api/EvolutionAPI/Instances.php';
+    require_once __DIR__ . '/../src/Api/WhatsApp/EvolutionAPI.php';
+    require_once __DIR__ . '/../src/Api/WhatsApp/Instances.php';
     
     $config = require __DIR__ . '/../config/config.php';
     

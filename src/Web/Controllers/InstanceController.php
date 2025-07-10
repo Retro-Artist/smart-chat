@@ -3,8 +3,8 @@
 
 require_once __DIR__ . '/../../Core/Helpers.php';
 require_once __DIR__ . '/../../Core/Database.php';
-require_once __DIR__ . '/../Models/WhatsAppInstance.php';
-require_once __DIR__ . '/../../Api/EvolutionAPI/WebhookHandler.php';
+require_once __DIR__ . '/../../Api/Models/WhatsappInstance.php';
+require_once __DIR__ . '/../../Api/WhatsApp/WebhookHandler.php';
 
 class InstanceController
 {
@@ -362,7 +362,7 @@ class InstanceController
         try {
             $config = require __DIR__ . '/../../../config/config.php';
 
-            require_once __DIR__ . '/../../Api/EvolutionAPI/EvolutionAPI.php';
+            require_once __DIR__ . '/../../Api/WhatsApp/EvolutionAPI.php';
 
             $api = new EvolutionAPI(
                 $config['evolutionAPI']['api_url'],

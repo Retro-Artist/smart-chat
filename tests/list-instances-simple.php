@@ -5,8 +5,8 @@
  */
 
 // Load required classes
-require_once __DIR__ . '/../src/Api/EvolutionAPI/EvolutionAPI.php';
-require_once __DIR__ . '/../src/Api/EvolutionAPI/Instances.php';
+require_once __DIR__ . '/../src/Api/WhatsApp/EvolutionAPI.php';
+require_once __DIR__ . '/../src/Api/WhatsApp/Instances.php';
 
 $config = require_once __DIR__ . '/../config/config.php';
 
