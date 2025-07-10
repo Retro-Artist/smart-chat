@@ -216,7 +216,7 @@ ob_start();
                                     :type="showPassword ? 'text' : 'password'"
                                     required
                                     class="block w-full pl-10 pr-10 py-3 border border-gray-300 rounded-lg shadow-theme-xs placeholder-gray-400 text-gray-900 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-brand-500 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-brand-400 dark:focus:border-brand-400 transition-colors"
-                                    placeholder="Create a secure password (min 12 chars, upper/lower/number/special)">
+                                    placeholder="Create a secure password (min 6 characters)">
                                 <button
                                     type="button"
                                     @click="showPassword = !showPassword"

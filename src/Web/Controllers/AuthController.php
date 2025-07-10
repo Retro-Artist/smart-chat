@@ -90,7 +90,7 @@ class AuthController {
         } elseif ($password !== $confirmPassword) {
             $error = 'Passwords do not match';
         } elseif (!Security::isValidPassword($password)) {
-            $error = Security::getPasswordRequirements();
+            $error = 'Password must be at least 6 characters';
         } elseif (!Security::isValidEmail($email)) {
             $error = 'Invalid email format';
         } else {
