@@ -1,5 +1,5 @@
 <?php
-// src/Api/OpenAI/ThreadsAPI.php - FIXED with better error handling
+// src/Api/OpenAI/ThreadsAPI.php - UPDATED for JSON message storage
 
 require_once __DIR__ . '/../../Core/Helpers.php';
 require_once __DIR__ . '/../Models/Thread.php';
@@ -12,17 +12,11 @@ class ThreadsAPI {
         Helpers::requireAuth();
         
         try {
-            $userId = Helpers::getCurrentUserId();
-            error_log("ThreadsAPI::getThreads - Getting threads for user: {$userId}");
-            
-            $threads = Thread::getUserThreads($userId);
-            error_log("ThreadsAPI::getThreads - Found " . count($threads) . " threads");
-            
+            $threads = Thread::getUserThreads(Helpers::getCurrentUserId());
             Helpers::jsonResponse($threads);
         } catch (Exception $e) {
-            error_log("ThreadsAPI::getThreads - Error: " . $e->getMessage());
-            error_log("ThreadsAPI::getThreads - Stack trace: " . $e->getTraceAsString());
-            Helpers::jsonError('Failed to fetch threads: ' . $e->getMessage(), 500);
+            error_log("Error fetching threads: " . $e->getMessage());
+            Helpers::jsonError('Failed to fetch threads', 500);
         }
     }
     
@@ -30,27 +24,20 @@ class ThreadsAPI {
         Helpers::requireAuth();
         
         $input = Helpers::getJsonInput();
+        Helpers::validateRequired($input, ['title']);
         
         try {
-            // Make title optional with default
-            $title = $input['title'] ?? 'New Chat';
             $systemMessage = $input['system_message'] ?? null;
-            
-            error_log("ThreadsAPI::createThread - Creating thread with title: '{$title}'");
-            
             $thread = Thread::create(
                 Helpers::getCurrentUserId(), 
-                $title,
+                $input['title'],
                 $systemMessage
             );
             
-            error_log("ThreadsAPI::createThread - Thread created with ID: {$thread['id']}");
-            
             Helpers::jsonResponse($thread, 201);
         } catch (Exception $e) {
-            error_log("ThreadsAPI::createThread - Error: " . $e->getMessage());
-            error_log("ThreadsAPI::createThread - Stack trace: " . $e->getTraceAsString());
-            Helpers::jsonError('Failed to create thread: ' . $e->getMessage(), 500);
+            error_log("Error creating thread: " . $e->getMessage());
+            Helpers::jsonError('Failed to create thread', 500);
         }
     }
     
@@ -58,21 +45,13 @@ class ThreadsAPI {
         Helpers::requireAuth();
         
         try {
-            // Validate thread ID
-            if (!$threadId || !is_numeric($threadId)) {
-                error_log("ThreadsAPI: Invalid thread ID received: " . var_export($threadId, true));
-                Helpers::jsonError('Invalid thread ID', 400);
-            }
-            
             // Check ownership first
             if (!Thread::belongsToUser($threadId, Helpers::getCurrentUserId())) {
-                error_log("ThreadsAPI: Access denied for thread {$threadId} by user " . Helpers::getCurrentUserId());
                 Helpers::jsonError('Access denied', 403);
             }
             
             $thread = Thread::findById($threadId);
             if (!$thread) {
-                error_log("ThreadsAPI: Thread {$threadId} not found");
                 Helpers::jsonError('Thread not found', 404);
             }
             
@@ -93,12 +72,6 @@ class ThreadsAPI {
         $input = Helpers::getJsonInput();
         
         try {
-            // Validate thread ID
-            if (!$threadId || !is_numeric($threadId)) {
-                error_log("ThreadsAPI: Invalid thread ID for update: " . var_export($threadId, true));
-                Helpers::jsonError('Invalid thread ID', 400);
-            }
-            
             // Check ownership
             if (!Thread::belongsToUser($threadId, Helpers::getCurrentUserId())) {
                 Helpers::jsonError('Access denied', 403);
@@ -118,7 +91,6 @@ class ThreadsAPI {
                     Thread::archive($threadId);
                 } else {
                     // Reactivate archived thread
-                    require_once __DIR__ . '/../../Core/Database.php';
                     $db = Database::getInstance();
                     $db->update('threads', ['status' => 'active'], 'id = ?', [$threadId]);
                 }
@@ -142,12 +114,6 @@ class ThreadsAPI {
         Helpers::requireAuth();
         
         try {
-            // Validate thread ID
-            if (!$threadId || !is_numeric($threadId)) {
-                error_log("ThreadsAPI: Invalid thread ID for delete: " . var_export($threadId, true));
-                Helpers::jsonError('Invalid thread ID', 400);
-            }
-            
             // Check ownership
             if (!Thread::belongsToUser($threadId, Helpers::getCurrentUserId())) {
                 Helpers::jsonError('Access denied', 403);
@@ -165,12 +131,6 @@ class ThreadsAPI {
         Helpers::requireAuth();
         
         try {
-            // Validate thread ID
-            if (!$threadId || !is_numeric($threadId)) {
-                error_log("ThreadsAPI: Invalid thread ID for messages: " . var_export($threadId, true));
-                Helpers::jsonError('Invalid thread ID', 400);
-            }
-            
             // Check ownership
             if (!Thread::belongsToUser($threadId, Helpers::getCurrentUserId())) {
                 Helpers::jsonError('Access denied', 403);
@@ -191,91 +151,49 @@ class ThreadsAPI {
     public function sendMessage($threadId) {
         Helpers::requireAuth();
         
-        // DEBUG: Log what we received
-        error_log("ThreadsAPI::sendMessage called with threadId: " . var_export($threadId, true));
-        
         $input = Helpers::getJsonInput();
-        error_log("ThreadsAPI::sendMessage input: " . json_encode($input));
+        Helpers::validateRequired($input, ['message']);
         
         try {
-            // Validate thread ID first
-            if (!$threadId || !is_numeric($threadId)) {
-                error_log("ThreadsAPI: Invalid thread ID received in sendMessage: " . var_export($threadId, true));
-                Helpers::jsonError('Invalid thread ID', 400);
-                return;
-            }
-            
-            // Validate input
-            if (!isset($input['message'])) {
-                error_log("ThreadsAPI: Missing message in input");
-                Helpers::jsonError('Message is required', 400);
-                return;
-            }
-            
             // Check ownership
             if (!Thread::belongsToUser($threadId, Helpers::getCurrentUserId())) {
-                error_log("ThreadsAPI: Access denied for thread {$threadId} by user " . Helpers::getCurrentUserId());
                 Helpers::jsonError('Access denied', 403);
-                return;
             }
             
             $userMessage = trim($input['message']);
             if (empty($userMessage)) {
-                error_log("ThreadsAPI: Empty message after trim");
                 Helpers::jsonError('Message cannot be empty', 400);
-                return;
             }
-            
-            error_log("ThreadsAPI: Processing message: '{$userMessage}' for thread {$threadId}");
             
             // Add user message to thread
             $userMessageData = Thread::addMessage($threadId, 'user', $userMessage);
-            error_log("ThreadsAPI: User message added successfully");
             
             // Get conversation history for OpenAI
             $conversationHistory = Thread::getOpenAIMessages($threadId);
-            error_log("ThreadsAPI: Retrieved " . count($conversationHistory) . " messages for OpenAI");
             
             // Use SystemAPI for OpenAI communication
-            try {
-                $systemAPI = new SystemAPI();
-                error_log("ThreadsAPI: SystemAPI instantiated successfully");
-            } catch (Exception $e) {
-                error_log("ThreadsAPI: Failed to instantiate SystemAPI: " . $e->getMessage());
-                throw new Exception("OpenAI API configuration error: " . $e->getMessage());
-            }
+            $systemAPI = new SystemAPI();
             
             // Check if a specific system message was provided
             $systemMessage = $input['system_message'] ?? null;
             
             // Make OpenAI API call
-            try {
-                $response = $systemAPI->callOpenAI([
-                    'messages' => $conversationHistory,
-                    'model' => $input['model'] ?? 'gpt-4o-mini',
-                    'temperature' => $input['temperature'] ?? 0.7,
-                    'max_tokens' => $input['max_tokens'] ?? 1024
-                ]);
-                
-                error_log("ThreadsAPI: OpenAI API call successful");
-            } catch (Exception $e) {
-                error_log("ThreadsAPI: OpenAI API call failed: " . $e->getMessage());
-                throw new Exception("OpenAI API error: " . $e->getMessage());
-            }
+            $response = $systemAPI->callOpenAI([
+                'messages' => $conversationHistory,
+                'model' => $input['model'] ?? 'gpt-4o-mini',
+                'temperature' => $input['temperature'] ?? 0.7,
+                'max_tokens' => $input['max_tokens'] ?? 1024
+            ]);
             
             // Extract assistant response
             if (!isset($response['choices'][0]['message']['content'])) {
-                error_log("ThreadsAPI: Invalid OpenAI response structure: " . json_encode($response));
                 throw new Exception('Invalid response from OpenAI API');
             }
             
             $assistantContent = trim($response['choices'][0]['message']['content']);
             if (empty($assistantContent)) {
                 $assistantContent = "I apologize, but I wasn't able to generate a proper response. Please try again.";
-                error_log("ThreadsAPI: Empty response from OpenAI, using fallback message");
             }
-            
-            error_log("ThreadsAPI: Assistant response: '{$assistantContent}'");
             
             // Prepare assistant message metadata
             $assistantMetadata = [
@@ -289,7 +207,6 @@ class ThreadsAPI {
             
             // Add assistant response to thread
             $assistantMessageData = Thread::addMessage($threadId, 'assistant', $assistantContent, $assistantMetadata);
-            error_log("ThreadsAPI: Assistant message added successfully");
             
             // Return response with message details
             Helpers::jsonResponse([
@@ -302,24 +219,21 @@ class ThreadsAPI {
             ]);
             
         } catch (Exception $e) {
-            error_log("ThreadsAPI::sendMessage error: " . $e->getMessage());
-            error_log("ThreadsAPI::sendMessage stack trace: " . $e->getTraceAsString());
+            error_log("Error sending message: " . $e->getMessage());
             
-            // Try to add an error message to the thread if we have a valid thread ID
-            if ($threadId && is_numeric($threadId)) {
-                try {
-                    Thread::addMessage($threadId, 'assistant', 
-                        "Sorry, I encountered an error processing your message. Please try again."
-                    );
-                    error_log("ThreadsAPI: Error message added to thread");
-                } catch (Exception $saveError) {
-                    error_log("ThreadsAPI: Failed to save error message: " . $saveError->getMessage());
-                }
+            // Try to add an error message to the thread
+            try {
+                Thread::addMessage($threadId, 'assistant', 
+                    "I encountered an error processing your message. Please try again."
+                );
+            } catch (Exception $saveError) {
+                error_log("Failed to save error message: " . $saveError->getMessage());
             }
             
             Helpers::jsonError('Failed to send message: ' . $e->getMessage(), 500);
         }
     }
+    
     /**
      * Import existing conversation from external source
      */
