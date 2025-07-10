@@ -1,5 +1,5 @@
 <?php
-// src/Core/Router.php - FIXED to handle WhatsApp controllers
+// src/Core/Router.php - FIXED to properly handle thread ID parameters
 
 class Router {
     private $routes = [];
@@ -30,6 +30,11 @@ class Router {
         // Remove trailing slash except for root
         if ($path !== '/' && substr($path, -1) === '/') {
             $path = rtrim($path, '/');
+        }
+        
+        // Debug logging for API requests
+        if (strpos($path, '/api/') === 0) {
+            error_log("Router: Processing API request - Method: {$method}, Path: {$path}");
         }
         
         foreach ($this->routes as $route) {
@@ -63,6 +68,12 @@ class Router {
         if (preg_match($pattern, $path, $matches)) {
             // Store parameters for later use
             $this->routeParameters = array_slice($matches, 1);
+            
+            // Debug logging for parameter extraction
+            if (strpos($path, '/api/') === 0) {
+                error_log("Router: Route matched - Pattern: {$routePath}, Parameters: " . json_encode($this->routeParameters));
+            }
+            
             return true;
         }
         
@@ -108,11 +119,56 @@ class Router {
             return;
         }
         
+        // DEBUG: Log what we're about to call
+        if (strpos($_SERVER['REQUEST_URI'], '/api/') === 0) {
+            error_log("Router: Calling {$handlerName}::{$methodName} with parameters: " . json_encode($this->routeParameters));
+        }
+        
         // Pass route parameters to the method if available
         if (!empty($this->routeParameters)) {
-            call_user_func_array([$handler, $methodName], $this->routeParameters);
+            try {
+                call_user_func_array([$handler, $methodName], $this->routeParameters);
+            } catch (Exception $e) {
+                error_log("Router: Error calling handler with parameters: " . $e->getMessage());
+                
+                // For API requests, return JSON error
+                if (strpos($_SERVER['REQUEST_URI'], '/api/') === 0) {
+                    if (ob_get_level()) {
+                        ob_clean();
+                    }
+                    http_response_code(500);
+                    header('Content-Type: application/json');
+                    echo json_encode([
+                        'success' => false,
+                        'error' => 'Internal server error',
+                        'message' => $e->getMessage()
+                    ]);
+                } else {
+                    throw $e;
+                }
+            }
         } else {
-            $handler->$methodName();
+            try {
+                $handler->$methodName();
+            } catch (Exception $e) {
+                error_log("Router: Error calling handler: " . $e->getMessage());
+                
+                // For API requests, return JSON error
+                if (strpos($_SERVER['REQUEST_URI'], '/api/') === 0) {
+                    if (ob_get_level()) {
+                        ob_clean();
+                    }
+                    http_response_code(500);
+                    header('Content-Type: application/json');
+                    echo json_encode([
+                        'success' => false,
+                        'error' => 'Internal server error',
+                        'message' => $e->getMessage()
+                    ]);
+                } else {
+                    throw $e;
+                }
+            }
         }
     }
     
@@ -129,7 +185,8 @@ class Router {
             echo json_encode([
                 'success' => false,
                 'error' => 'Not found',
-                'message' => 'API endpoint not found'
+                'message' => 'API endpoint not found',
+                'path' => $_SERVER['REQUEST_URI']
             ]);
         } else {
             // Load 404 error page for web requests
