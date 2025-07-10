@@ -1,25 +1,39 @@
-We are in the process of developing an exceptionally simple interface application that utilizes EvolutionAPI. The implementation will employ PHP 8.4 on a Nginx server, structured within a clean and intuitive project architecture that emphasizes minimalism and user-friendliness. The core objective is to provide a chat interface that delivers the full spectrum of EvolutionAPI capabilities.
+**The Mission**:
+We are in the process of developing an exceptionally simple web-based chat application utilizing OpenAI's chat-completions API and its integration with WhatsApp through an open-source API known as Evolution API. The implementation will employ PHP 8.4 alongside Nginx, structured within a clean and intuitive project architecture that emphasizes minimalism and user-friendliness. The core objective is to provide a chat interface that delivers the full spectrum of GPT's capabilities for general users, including tool execution and responsive query handling, complemented by EvolutionAPI's strong capabilities and WhatsApp integration. The web part of our system takes care of user authentication and active session management, featuring a list of recent conversations.
 
-**Code Quality**:  
+**Code Quality**:
 Our codebase will adhere to the highest standards of cleanliness and maintainability, with a pronounced focus on clear and comprehensible syntax. We will emphasize meaningful and descriptive naming conventions for functions and variables, favoring straightforward and explicit code over unnecessary complexity and over-engineering, avoid procedural code at all costs and look to always use existing methods instead of creating variations of one.
 
-*Front-End**:
-We will be using html, css altogether with alpine.js and tailwind to create beautiful and modern interfaces to make our application to look like a modernized version of whatsapp-web.
-
-**Maintainability**  
+**Maintainability**
 Our foundational principle is that clarity and maintainability are paramount; every line of code should be easily understandable, extensible, and debuggable, developer-friendly.
 
+**System Peculiarities**:
+
+* **Front-End**:
+  We will be using HTML, CSS altogether with Alpine.js and Tailwind to create beautiful and modern interfaces to make our application look like a modernized version of WhatsApp Web.
+
+* **Env Loading**
+  We use a functional `.env` loader method in our `config/` directory named `load_env.php`, which loads environment variables to be parsed in `config.php`. These variables can now be used by our system. It is mandatory for our application to use `config.php` to access the required variables.
+
+* **Migrations**
+  Our system can migrate `.sql` files located in the `database/` directory into Docker containers or SQL applications by running the `migrate.php` script in the same directory.
+
 **Resources**
-- Before starting any task, open and thoroughly review the existing project files and the `database.sql` file to gain a solid understanding of the project's structure and data model.
+
+* Before starting any task, open and thoroughly review the existing project files and the `database.sql` file to gain a solid understanding of the project's structure and data model.
+* To better comprehend Evolution's API capabilities and integration, read the documentation at the website: [https://doc.evolution-api.com/v2/api-reference/get-information](https://doc.evolution-api.com/v2/api-reference/get-information)
+* For further insights into agentic systems, consult the following materials:
+  * The PDF document titled `whitepaper_Prompt Engineering_v4.pdf`
+  * OpenAI's official Chat Completions API documentation: https://platform.openai.com/docs/api-reference/chat
+
 
 **Project Status**
 
-- API consumption is set up under the `src/` directory and can be tested using the files in `tests/`.
-- The `public/` directory is currently not integrated with the API. Its sole purpose for now is to verify database connectivity and environment variable loading. Check `config.php` and `load_env.php` to see how `index.php` interfaces with them. This setup also ties into `docker-compose.yml` and the `.env` file.
 
 
 # Current Project Structure:
 
+```
 smart-chat/
 ├── config
 │   ├── config.php               # Environment config and declaration
@@ -28,7 +42,7 @@ smart-chat/
 │   ├── database.sql             # database (current database file)
 │   └── migrate.php              # migration script
 ├── logs
-├── media                        # EvolutionAPI media resources for sending in whatsapp messages
+├── media                        # EvolutionAPI media resources for sending in WhatsApp messages
 │   ├── audio
 │   ├── documents
 │   ├── images
@@ -38,12 +52,12 @@ smart-chat/
 │   │   ├── css
 │   │   │   └── style.css
 │   │   └── js
-│   │       └── theme-manager.js # javascript code for dark-light mode
+│   │       └── theme-manager.js # JavaScript code for dark-light mode
 │   ├── favicon.ico
 │   └── index.php
 ├── src
 │   ├── Api
-│   │   ├── EvolutionAPI         # Api used for Whatsapp requests
+│   │   ├── EvolutionAPI         # API used for WhatsApp requests
 │   │   │   ├── ChatController.php
 │   │   │   ├── EvolutionAPI.php
 │   │   │   ├── Instances.php
@@ -99,9 +113,9 @@ smart-chat/
 │           ├── login.php
 │           ├── register.php
 │           └── status.php
-├── temp                         # temporary processed files by EvolutionAPI
-├── tests                        # tests for evolution API
-│   ├── POST                     # examples for sending messages with media
+├── temp                         # Temporary processed files by EvolutionAPI
+├── tests                        # Tests for EvolutionAPI
+│   ├── POST                     # Examples for sending messages with media
 │   │   ├── send-audio.php
 │   │   ├── send-docs.php
 │   │   ├── send-images.php
@@ -110,13 +124,14 @@ smart-chat/
 │   ├── debug-api-endpoint.php
 │   ├── debug-current-instance.php
 │   ├── debug-qr-web.php
-│   ├── instance-management.php  # test creating and managing instances.
+│   ├── instance-management.php  # Test creating and managing instances
 │   ├── list-instances-simple.php
-│   └── send-message.php         # test sending whatsapp messages to test number.
+│   └── send-message.php         # Test sending WhatsApp messages to test number
 ├── composer.json
 ├── docker-compose.yml
 ├── Dockerfile
-├── .env #env file that's parsed in config.php
+├── .env                         # .env file that's parsed in config.php
 ├── env.example
 ├── nginx.conf
 └── README.md
+```

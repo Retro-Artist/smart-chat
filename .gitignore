@@ -25,3 +25,7 @@ logs/*
 
 # Cache
 /.phpunit.result.cache
+
+# Claude
+CLAUDE.md
+REFACTORING.md

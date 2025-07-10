@@ -83,19 +83,25 @@ class Router {
     private function callHandler($route) {
         list($handlerName, $methodName) = explode('@', $route['handler']);
         
-        // FIXED: Determine handler directory based on route type AND handler name
-        if ($route['type'] === 'api') {
-            // Check if it's a WhatsApp/Instance controller (should be in Web/Controllers)
-            if (strpos($handlerName, 'WhatsApp') !== false || strpos($handlerName, 'Instance') !== false) {
-                $handlerFile = __DIR__ . "/../Web/Controllers/{$handlerName}.php";
-            } else {
-                // Other API controllers are in Api/OpenAI
-                $handlerFile = __DIR__ . "/../Api/OpenAI/{$handlerName}.php";
-            }
-        } else {
-            // Web controllers are in Web/Controllers
-            $handlerFile = __DIR__ . "/../Web/Controllers/{$handlerName}.php";
-        }
+        // Simplified controller path resolution
+        $controllerPaths = [
+            // Web Controllers
+            'HomeController' => 'Web/Controllers',
+            'ChatController' => 'Web/Controllers',
+            'DashboardController' => 'Web/Controllers',
+            'AgentController' => 'Web/Controllers',
+            'AuthController' => 'Web/Controllers',
+            'InstanceController' => 'Web/Controllers',
+            
+            // OpenAI API Controllers
+            'ThreadsAPI' => 'Api/OpenAI',
+            'AgentsAPI' => 'Api/OpenAI',
+            'ToolsAPI' => 'Api/OpenAI',
+            'SystemAPI' => 'Api/OpenAI',
+        ];
+        
+        $controllerDir = $controllerPaths[$handlerName] ?? 'Web/Controllers';
+        $handlerFile = __DIR__ . "/../{$controllerDir}/{$handlerName}.php";
         
         if (!file_exists($handlerFile)) {
             error_log("Router: Handler file not found: {$handlerFile}");
