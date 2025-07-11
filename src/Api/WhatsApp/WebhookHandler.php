@@ -4,7 +4,7 @@
 require_once __DIR__ . '/../../Core/Database.php';
 require_once __DIR__ . '/../../Core/Logger.php';
 require_once __DIR__ . '/MessageImporter.php';
-require_once __DIR__ . '/../Models/WhatsappInstance.php';
+require_once __DIR__ . '/../Models/Instance.php';
 require_once __DIR__ . '/../Models/Agent.php';
 
 class WebhookHandler
@@ -19,7 +19,7 @@ class WebhookHandler
         $this->db = Database::getInstance();
         $this->logger = new Logger();
         $this->messageImporter = new MessageImporter();
-        $this->whatsappInstance = new WhatsAppInstance();
+        $this->whatsappInstance = new Instance();
     }
 
     /**

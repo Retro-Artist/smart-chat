@@ -11,7 +11,7 @@ $_SESSION['user_id'] = 1;
 // Load dependencies
 require_once __DIR__ . '/../src/Core/Database.php';
 require_once __DIR__ . '/../src/Core/Helpers.php';
-require_once __DIR__ . '/../src/Api/Models/WhatsappInstance.php';
+require_once __DIR__ . '/../src/Api/Models/Instance.php';
 
 echo "<!DOCTYPE html>\n";
 echo "<html><head><title>QR Debug</title></head><body>\n";
@@ -19,7 +19,7 @@ echo "<h1>QR Code Debug Test</h1>\n";
 echo "<pre>\n";
 
 try {
-    $whatsappInstance = new WhatsAppInstance();
+    $whatsappInstance = new Instance();
     
     // Get instances
     $instances = $whatsappInstance->getUserInstances(1);

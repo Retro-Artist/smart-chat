@@ -1,12 +1,12 @@
 <?php
-// src/Web/Models/WhatsAppInstance.php
+// src/Api/Models/Instance.php
 
 require_once __DIR__ . '/../../Core/Database.php';
 require_once __DIR__ . '/../../Core/Helpers.php';
 require_once __DIR__ . '/../../Api/WhatsApp/EvolutionAPI.php';
 require_once __DIR__ . '/../../Api/WhatsApp/Instances.php';
 
-class WhatsAppInstance
+class Instance
 {
     private $db;
     private $config;

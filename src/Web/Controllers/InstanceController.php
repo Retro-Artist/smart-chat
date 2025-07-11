@@ -3,7 +3,7 @@
 
 require_once __DIR__ . '/../../Core/Helpers.php';
 require_once __DIR__ . '/../../Core/Database.php';
-require_once __DIR__ . '/../../Api/Models/WhatsappInstance.php';
+require_once __DIR__ . '/../../Api/Models/Instance.php';
 require_once __DIR__ . '/../../Api/WhatsApp/WebhookHandler.php';
 
 class InstanceController
@@ -13,7 +13,7 @@ class InstanceController
 
     public function __construct()
     {
-        $this->whatsappInstance = new WhatsAppInstance();
+        $this->whatsappInstance = new Instance();
         $this->db = Database::getInstance();
     }
 

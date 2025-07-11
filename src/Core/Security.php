@@ -96,4 +96,28 @@ class Security {
         $_SESSION[$cacheKey]['count']++;
         return true;
     }
+    
+    /**
+     * Mask phone number for privacy
+     */
+    public static function maskPhoneNumber($phone) {
+        if (empty($phone)) {
+            return '';
+        }
+        
+        // Remove any non-digit characters
+        $phone = preg_replace('/[^0-9]/', '', $phone);
+        
+        // If phone number is less than 4 digits, return as is
+        if (strlen($phone) < 4) {
+            return $phone;
+        }
+        
+        // Show first 3 and last 2 digits, mask the rest
+        $firstPart = substr($phone, 0, 3);
+        $lastPart = substr($phone, -2);
+        $maskedPart = str_repeat('*', strlen($phone) - 5);
+        
+        return $firstPart . $maskedPart . $lastPart;
+    }
 }

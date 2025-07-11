@@ -10,13 +10,13 @@ $_SESSION['user_id'] = 1;
 // Load dependencies
 require_once __DIR__ . '/../src/Core/Database.php';
 require_once __DIR__ . '/../src/Core/Helpers.php';
-require_once __DIR__ . '/../src/Api/Models/WhatsappInstance.php';
+require_once __DIR__ . '/../src/Api/Models/Instance.php';
 
 echo "🔍 Debug Current Instance QR Code\n";
 echo "==================================\n\n";
 
 try {
-    $whatsappInstance = new WhatsAppInstance();
+    $whatsappInstance = new Instance();
     
     // Get the current instance (the one showing as connecting)
     $instances = $whatsappInstance->getUserInstances(1);

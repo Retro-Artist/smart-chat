@@ -7,10 +7,11 @@ ob_start();
 // Initialize dependencies - same as working tests
 require_once __DIR__ . '/../../Core/Database.php';
 require_once __DIR__ . '/../../Core/Helpers.php';
-require_once __DIR__ . '/../../Api/Models/WhatsappInstance.php';
+require_once __DIR__ . '/../../Core/Security.php';
+require_once __DIR__ . '/../../Api/Models/Instance.php';
 
 $userId = Helpers::getCurrentUserId();
-$whatsappInstance = new WhatsAppInstance();
+$whatsappInstance = new Instance();
 
 // Load configuration - same as working test files
 $config = require __DIR__ . '/../../../config/config.php';
