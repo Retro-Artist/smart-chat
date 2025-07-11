@@ -539,6 +539,15 @@ ob_start();
 
 <!-- Chart.js Integration with Enhanced Theme Support -->
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<style>
+  /* Prevent canvas elements from showing transitions during theme changes */
+  canvas {
+    transition: none !important;
+  }
+  canvas.theme-transition-disable {
+    opacity: 1 !important;
+  }
+</style>
 <script>
   document.addEventListener('DOMContentLoaded', function() {
     let conversationsChart = null;
@@ -591,19 +600,8 @@ ob_start();
           datasets: [{
             label: 'Conversations',
             data: realConversationData.data, // Real data from PHP - NO MORE Math.random()!
-            borderColor: colors.primary,
-            backgroundColor: colors.primary + '20',
-            borderWidth: 3,
             fill: true,
             tension: 0.4,
-            pointBackgroundColor: colors.primary,
-            pointBorderColor: colors.background,
-            pointBorderWidth: 3,
-            pointRadius: 5,
-            pointHoverRadius: 7,
-            pointHoverBackgroundColor: colors.primary,
-            pointHoverBorderColor: colors.background,
-            pointHoverBorderWidth: 3
           }]
         },
         options: {
@@ -763,15 +761,19 @@ ob_start();
 
     // Update chart colors on theme change without recreating charts
     function handleThemeChange() {
-      // Small delay to ensure DOM has updated
-      setTimeout(() => {
-        updateChartColors();
-      }, 50);
+      // Update immediately without delay to prevent visual glitches
+      updateChartColors();
     }
 
     // Update chart colors without reinitializing (prevents animation restart)
     function updateChartColors() {
       const colors = getChartColors();
+      
+      // Add class to disable CSS transitions during update
+      const chartContainers = document.querySelectorAll('#conversationsChart, #agentPerformanceChart');
+      chartContainers.forEach(canvas => {
+        canvas.classList.add('theme-transition-disable');
+      });
       
       if (conversationsChart) {
         // Update conversation chart colors
@@ -814,6 +816,13 @@ ob_start();
         
         agentPerformanceChart.update('none'); // Update without animation
       }
+      
+      // Re-enable transitions after a brief moment
+      requestAnimationFrame(() => {
+        chartContainers.forEach(canvas => {
+          canvas.classList.remove('theme-transition-disable');
+        });
+      });
     }
 
     // Initialize charts on page load
