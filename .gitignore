@@ -27,5 +27,6 @@ logs/*
 /.phpunit.result.cache
 
 # Claude files
+.claude/
 CLAUDE.md
-REFACTORING.md
+SCRATCH.md
