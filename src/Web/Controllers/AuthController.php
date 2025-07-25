@@ -4,6 +4,8 @@
 require_once __DIR__ . '/../../Core/Helpers.php';
 require_once __DIR__ . '/../../Core/Security.php';
 require_once __DIR__ . '/../../Api/Models/User.php';
+require_once __DIR__ . '/../../Api/Models/WhatsAppInstance.php';
+require_once __DIR__ . '/../../Api/WhatsApp/InstanceManager.php';
 
 class AuthController {
     
@@ -44,8 +46,13 @@ class AuthController {
                     // Update last login
                     $userModel->updateLastLogin($user['id']);
                     
-                    // Redirect to dashboard instead of chat
-                    Helpers::redirect('/dashboard');
+                    // Check WhatsApp instance status if enabled
+                    if (WHATSAPP_ENABLED) {
+                        $this->handleWhatsAppLogin($user['id']);
+                    } else {
+                        // Redirect to dashboard if WhatsApp is disabled
+                        Helpers::redirect('/dashboard');
+                    }
                 } else {
                     $error = 'Invalid username or password';
                 }
@@ -103,8 +110,13 @@ class AuthController {
                 $_SESSION['username'] = $user['username'];
                 $_SESSION['email'] = $user['email'];
                 
-                // Redirect to dashboard instead of chat
-                Helpers::redirect('/dashboard');
+                // Check WhatsApp instance status if enabled
+                if (WHATSAPP_ENABLED) {
+                    $this->handleWhatsAppLogin($user['id']);
+                } else {
+                    // Redirect to dashboard if WhatsApp is disabled
+                    Helpers::redirect('/dashboard');
+                }
                 
             } catch (Exception $e) {
                 $error = $e->getMessage();
@@ -124,5 +136,84 @@ class AuthController {
         
         // Redirect to home
         Helpers::redirect('/');
+    }
+    
+    private function handleWhatsAppLogin($userId) {
+        try {
+            require_once __DIR__ . '/../../Api/WhatsApp/EvolutionAPI.php';
+            
+            $instanceModel = new WhatsAppInstance();
+            $instance = $instanceModel->findByUserId($userId);
+            
+            if (!$instance) {
+                // First time WhatsApp login - setup new instance
+                $instanceManager = new InstanceManager();
+                $result = $instanceManager->createInstance($userId);
+                
+                if ($result && isset($result['id'])) {
+                    // Instance created successfully - always redirect to QR scan
+                    $_SESSION['whatsapp_setup'] = true;
+                    $_SESSION['whatsapp_first_login'] = true;
+                    $_SESSION['connection_state'] = 'creating';
+                    Helpers::redirect('/whatsapp/connect?state=creating');
+                } else {
+                    // Failed to create instance - still redirect to QR scan to handle error
+                    $_SESSION['error'] = 'Failed to setup WhatsApp: Unable to create instance';
+                    $_SESSION['connection_state'] = 'failed';
+                    Helpers::redirect('/whatsapp/connect?state=failed');
+                }
+            } else {
+                // Check real-time connection state from Evolution API
+                $evolutionAPI = new EvolutionAPI();
+                $connectionState = 'unknown';
+                
+                try {
+                    $connectionState = $evolutionAPI->getConnectionState($instance['instance_name']);
+                } catch (Exception $e) {
+                    error_log("Failed to get connection state: " . $e->getMessage());
+                    $connectionState = 'unknown';
+                }
+                
+                // Store connection state in session for QR page
+                $_SESSION['connection_state'] = $connectionState;
+                
+                // ALWAYS redirect to QR scan page - let the QR page handle routing based on state
+                // The QR page will auto-redirect to dashboard if connection state is 'open'
+                switch ($connectionState) {
+                    case 'open':
+                        // Connected - redirect to QR page which will auto-redirect to dashboard
+                        $_SESSION['whatsapp_already_connected'] = true;
+                        Helpers::redirect('/whatsapp/connect?state=open');
+                        break;
+                        
+                    case 'connecting':
+                        // Connecting - show existing QR code
+                        $_SESSION['whatsapp_connecting'] = true;
+                        Helpers::redirect('/whatsapp/connect?state=connecting');
+                        break;
+                        
+                    case 'disconnected':
+                    case 'failed':
+                        // Disconnected/Failed - needs restart and new QR
+                        $_SESSION['whatsapp_reconnect_needed'] = true;
+                        Helpers::redirect('/whatsapp/connect?state=' . $connectionState);
+                        break;
+                        
+                    case 'close':
+                    case 'unknown':
+                    default:
+                        // Needs fresh QR code
+                        $_SESSION['whatsapp_qr_needed'] = true;
+                        Helpers::redirect('/whatsapp/connect?state=' . $connectionState);
+                        break;
+                }
+            }
+        } catch (Exception $e) {
+            error_log("WhatsApp login handling error: " . $e->getMessage());
+            // Even on error, redirect to QR scan page to handle the error state
+            $_SESSION['error'] = 'WhatsApp connection check failed';
+            $_SESSION['connection_state'] = 'error';
+            Helpers::redirect('/whatsapp/connect?state=error');
+        }
     }
 }

@@ -64,9 +64,22 @@ services:
     networks:
       - app-network
 
+  # Redis Service
+  redis:
+    image: redis:7-alpine
+    restart: always
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - app-network
+    command: redis-server --appendonly yes
+
 networks:
   app-network:
     driver: bridge
 
 volumes:
   mysql_data:
+  redis_data:

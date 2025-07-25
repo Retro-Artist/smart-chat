@@ -120,4 +120,96 @@ class Security {
         
         return $firstPart . $maskedPart . $lastPart;
     }
+    
+    /**
+     * Check WhatsApp connection state for a user
+     * Returns the real-time connection state from Evolution API
+     */
+    public static function checkWhatsAppConnection($userId) {
+        try {
+            // Check if WhatsApp is enabled
+            if (!defined('WHATSAPP_ENABLED') || !WHATSAPP_ENABLED) {
+                return 'disabled';
+            }
+            
+            // Get user's WhatsApp instance
+            require_once __DIR__ . '/../Api/Models/WhatsAppInstance.php';
+            require_once __DIR__ . '/../Api/WhatsApp/EvolutionAPI.php';
+            
+            $instanceModel = new WhatsAppInstance();
+            $instance = $instanceModel->findByUserId($userId);
+            
+            if (!$instance) {
+                return 'no_instance';
+            }
+            
+            // Check real-time connection state from Evolution API
+            $evolutionAPI = new EvolutionAPI();
+            $connectionState = $evolutionAPI->getConnectionState($instance['instance_name']);
+            
+            return $connectionState;
+            
+        } catch (Exception $e) {
+            error_log("WhatsApp connection check failed: " . $e->getMessage());
+            return 'unknown';
+        }
+    }
+    
+    /**
+     * Require WhatsApp connection for web endpoints
+     * Redirects to QR scan page if connection state is not 'open'
+     */
+    public static function requireWhatsAppConnection($userId = null) {
+        require_once __DIR__ . '/Helpers.php';
+        
+        // First check basic authentication
+        if (!Helpers::isAuthenticated()) {
+            Helpers::redirect('/login');
+            return;
+        }
+        
+        $userId = $userId ?: Helpers::getCurrentUserId();
+        
+        if (!$userId) {
+            Helpers::redirect('/login');
+            return;
+        }
+        
+        $connectionState = self::checkWhatsAppConnection($userId);
+        
+        // Only allow access if connection state is 'open'
+        if ($connectionState !== 'open') {
+            Helpers::redirect('/whatsapp/connect?state=' . urlencode($connectionState));
+            return;
+        }
+    }
+    
+    /**
+     * Require WhatsApp connection for API endpoints
+     * Returns JSON error if connection state is not 'open'
+     */
+    public static function requireWhatsAppConnectionAPI($userId = null) {
+        require_once __DIR__ . '/Helpers.php';
+        
+        // First check basic authentication
+        if (!Helpers::isAuthenticated()) {
+            Helpers::jsonError('Unauthorized', 401);
+            return;
+        }
+        
+        $userId = $userId ?: Helpers::getCurrentUserId();
+        
+        if (!$userId) {
+            Helpers::jsonError('Unauthorized', 401);
+            return;
+        }
+        
+        $connectionState = self::checkWhatsAppConnection($userId);
+        
+        // Only allow access if connection state is 'open'
+        if ($connectionState !== 'open') {
+            Helpers::jsonError('WhatsApp not connected. Current state: ' . $connectionState, 403);
+            return;
+        }
+    }
 }

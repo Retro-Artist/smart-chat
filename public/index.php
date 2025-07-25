@@ -42,6 +42,13 @@ $router->addWebRoute('GET', '/register', 'AuthController@showRegister');
 $router->addWebRoute('POST', '/register', 'AuthController@processRegister');
 $router->addWebRoute('GET', '/logout', 'AuthController@logout');
 
+// WhatsApp Web Routes (only if WhatsApp is enabled)
+if (defined('WHATSAPP_ENABLED') && WHATSAPP_ENABLED) {
+    $router->addWebRoute('GET', '/whatsapp', 'WhatsAppController@index');
+    $router->addWebRoute('GET', '/whatsapp/connect', 'WhatsAppController@connect');
+    $router->addWebRoute('GET', '/whatsapp/chat', 'WhatsAppController@chat');
+}
+
 // ===================================
 // API ROUTES (JSON Responses)
 // ===================================
@@ -67,6 +74,23 @@ $router->addApiRoute('POST', '/api/tools/{name}/execute', 'ToolsAPI@executeTool'
 
 $router->addApiRoute('GET', '/api/system/status', 'SystemAPI@getStatus');
 $router->addApiRoute('GET', '/api/system/config', 'SystemAPI@getConfig');
+
+// WhatsApp API Routes (only if WhatsApp is enabled)
+if (defined('WHATSAPP_ENABLED') && WHATSAPP_ENABLED) {
+    // Instance management
+    $router->addApiRoute('GET', '/api/whatsapp/status', 'WhatsAppController@getStatus');
+    $router->addApiRoute('POST', '/api/whatsapp/qr', 'WhatsAppController@generateQR');
+    $router->addApiRoute('POST', '/api/whatsapp/restart', 'WhatsAppController@restartInstance');
+    $router->addApiRoute('POST', '/api/whatsapp/disconnect', 'WhatsAppController@disconnect');
+    
+    // Messaging
+    $router->addApiRoute('POST', '/api/whatsapp/send', 'WhatsAppController@sendMessage');
+    $router->addApiRoute('GET', '/api/whatsapp/messages', 'WhatsAppController@getMessages');
+    $router->addApiRoute('GET', '/api/whatsapp/conversations', 'WhatsAppController@getConversations');
+    
+    // Sync operations
+    $router->addApiRoute('POST', '/api/whatsapp/sync', 'WhatsAppController@triggerSync');
+}
 
 // ===================================
 // HANDLE REQUEST

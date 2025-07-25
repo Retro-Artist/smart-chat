@@ -91,8 +91,23 @@ class User {
         );
     }
     
+    public function updateOwnerJid($userId, $ownerJid) {
+        $this->db->update('users', 
+            ['owner_jid' => $ownerJid], 
+            'id = ?', 
+            [$userId]
+        );
+    }
+    
+    public function findByOwnerJid($ownerJid) {
+        return $this->db->fetch(
+            "SELECT * FROM users WHERE owner_jid = ?", 
+            [$ownerJid]
+        );
+    }
+    
     public function updateProfile($userId, $data) {
-        $allowedFields = ['username', 'email'];
+        $allowedFields = ['username', 'email', 'owner_jid'];
         $updateData = [];
         
         foreach ($allowedFields as $field) {

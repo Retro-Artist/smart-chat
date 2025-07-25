@@ -26,6 +26,11 @@ logs/*
 # Cache
 /.phpunit.result.cache
 
+temp/*
+
+workers/*
+
+
 # Claude files
 .claude/
 CLAUDE.md

@@ -91,12 +91,16 @@ class Router {
             'DashboardController' => 'Web/Controllers',
             'AgentController' => 'Web/Controllers',
             'AuthController' => 'Web/Controllers',
+            'WhatsAppController' => 'Web/Controllers',
             
             // OpenAI API Controllers
             'ThreadsAPI' => 'Api/OpenAI',
             'AgentsAPI' => 'Api/OpenAI',
             'ToolsAPI' => 'Api/OpenAI',
             'SystemAPI' => 'Api/OpenAI',
+            
+            // WhatsApp API Controllers
+            'WebhookController' => 'Api/WhatsApp',
         ];
         
         $controllerDir = $controllerPaths[$handlerName] ?? 'Web/Controllers';

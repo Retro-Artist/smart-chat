@@ -8,8 +8,9 @@ require_once __DIR__ . '/../../Api/Models/Agent.php';
 class ChatController {
     
     public function index() {
-        // Check if user is logged in
-        Helpers::requireWebAuth();
+        // Check if user is logged in and WhatsApp is connected
+        require_once __DIR__ . '/../../Core/Security.php';
+        Security::requireWhatsAppConnection();
         
         $userId = Helpers::getCurrentUserId();
         
