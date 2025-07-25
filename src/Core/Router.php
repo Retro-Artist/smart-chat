@@ -91,7 +91,6 @@ class Router {
             'DashboardController' => 'Web/Controllers',
             'AgentController' => 'Web/Controllers',
             'AuthController' => 'Web/Controllers',
-            'InstanceController' => 'Web/Controllers',
             
             // OpenAI API Controllers
             'ThreadsAPI' => 'Api/OpenAI',
