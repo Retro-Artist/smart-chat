@@ -7,15 +7,14 @@
  */
 
 // Load the configuration system and Status class
-require_once __DIR__ . '/../app/config.php';
-require_once __DIR__ . '/../src/Core/Status.php';
-$config = require __DIR__ . '/../app/config.php';
+require_once __DIR__ . '/../../config/config.php';
+require_once __DIR__ . '/../../Core/Status.php';
 
 // Run all status checks using the Status class
-$configStatus = Status::checkConfigurationStatus($config);
-$openaiTest = Status::testOpenAIAPI($config);
-$evolutionTest = Status::testEvolutionAPI($config);
-$db = Status::setupDatabaseConnection($config);
+$configStatus = Status::checkConfigurationStatus();
+$openaiTest = Status::testOpenAIAPI();
+$evolutionTest = Status::testEvolutionAPI();
+$db = Status::setupDatabaseConnection();
 
 ?>
 <!DOCTYPE html>
@@ -24,7 +23,7 @@ $db = Status::setupDatabaseConnection($config);
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title><?= htmlspecialchars($config['app']['name'] ?? 'Simple PHP Initialization') ?></title>
+    <title><?= htmlspecialchars(SYSTEM_NAME ?: 'Simple PHP Initialization') ?></title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="shortcut icon" href="favicon.ico" type="image/x-icon">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
@@ -33,9 +32,9 @@ $db = Status::setupDatabaseConnection($config);
 <body class="bg-php-50 text-php-800">
     <div class="max-w-5xl mx-auto p-6">
         <header class="pb-4 border-b border-php-200 mb-6">
-            <h1 class="text-3xl font-bold text-php-900"><?= htmlspecialchars($config['app']['name'] ?? 'Simple PHP Initialization') ?></h1>
-            <p class="text-lg text-php-600">Your PHP <?= phpversion() ?> environment is ready! <span class="text-php-500">(v<?= htmlspecialchars($config['app']['version'] ?? '1.0.0') ?>)</span></p>
-            <?php if ($config['app']['debug'] ?? false): ?>
+            <h1 class="text-3xl font-bold text-php-900"><?= htmlspecialchars(SYSTEM_NAME ?: 'Simple PHP Initialization') ?></h1>
+            <p class="text-lg text-php-600">Your PHP <?= phpversion() ?> environment is ready! <span class="text-php-500">(v<?= htmlspecialchars(SYSTEM_VERSION ?: '1.0.0') ?>)</span></p>
+            <?php if (SYSTEM_DEBUG): ?>
                 <div class="mt-2 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
                     <i class="fas fa-bug mr-1"></i> Debug Mode Enabled
                 </div>
@@ -103,7 +102,7 @@ $db = Status::setupDatabaseConnection($config);
                     <li class="p-3 text-php-700">Web Server: <span class="text-php-900 font-medium"><?= $_SERVER['SERVER_SOFTWARE'] ?></span></li>
                     <li class="p-3 text-php-700">Document Root: <span class="text-php-900 font-medium"><?= $_SERVER['DOCUMENT_ROOT'] ?></span></li>
                     <li class="p-3 text-php-700">Server Protocol: <span class="text-php-900 font-medium"><?= $_SERVER['SERVER_PROTOCOL'] ?></span></li>
-                    <li class="p-3 text-php-700">Environment: <span class="text-php-900 font-medium"><?= $config['app']['debug'] ? 'Development' : 'Production' ?></span></li>
+                    <li class="p-3 text-php-700">Environment: <span class="text-php-900 font-medium"><?= SYSTEM_DEBUG ? 'Development' : 'Production' ?></span></li>
                 </ul>
             </div>
 
@@ -118,7 +117,7 @@ $db = Status::setupDatabaseConnection($config);
                             <i class="fas fa-check-circle mr-2"></i>Database connection successful!
                         </div>
                         <div class="space-y-1 text-sm text-php-700">
-                            <p>Host: <strong class="text-php-900"><?= htmlspecialchars($config['database']['host']) ?>:<?= $config['database']['port'] ?></strong></p>
+                            <p>Host: <strong class="text-php-900"><?= htmlspecialchars(DB_HOST) ?>:<?= DB_PORT ?></strong></p>
                             <p>Database: <strong class="text-php-900"><?= htmlspecialchars($db['dbname']) ?></strong></p>
                             <?php if ($db['mysqlVersion']): ?>
                                 <p>MySQL Version: <strong class="text-php-900"><?= htmlspecialchars($db['mysqlVersion']) ?></strong></p>
@@ -192,10 +191,10 @@ $db = Status::setupDatabaseConnection($config);
                         <p class="mt-2 text-php-700">Check your database connection settings in the .env file</p>
                         <div class="mt-3 text-xs text-php-600 bg-php-50 p-2 rounded border">
                             <strong>Current config:</strong><br>
-                            Host: <?= htmlspecialchars($config['database']['host'] ?: 'not set') ?><br>
-                            Port: <?= ($config['database']['port'] && $config['database']['port'] > 0) ? htmlspecialchars($config['database']['port']) : 'not set' ?><br>
-                            Database: <?= htmlspecialchars($config['database']['database'] ?: 'not set') ?><br>
-                            Username: <?= htmlspecialchars($config['database']['username'] ?: 'not set') ?>
+                            Host: <?= htmlspecialchars(DB_HOST ?: 'not set') ?><br>
+                            Port: <?= (DB_PORT && DB_PORT > 0) ? htmlspecialchars(DB_PORT) : 'not set' ?><br>
+                            Database: <?= htmlspecialchars(DB_DATABASE ?: 'not set') ?><br>
+                            Username: <?= htmlspecialchars(DB_USERNAME ?: 'not set') ?>
                         </div>
                     <?php endif; ?>
                 </div>
@@ -407,7 +406,7 @@ $db = Status::setupDatabaseConnection($config);
         <footer class="pt-4 my-md-5 pt-md-5 border-t border-php-200">
             <div class="row">
                 <div class="col-12 col-md">
-                    <small class="d-block mb-3 text-php-500">&copy; <?= date('Y') ?> <?= htmlspecialchars($config['app']['name'] ?? 'Simple PHP Initialization') ?></small>
+                    <small class="d-block mb-3 text-php-500">&copy; <?= date('Y') ?> <?= htmlspecialchars(SYSTEM_NAME ?: 'Simple PHP Initialization') ?></small>
                 </div>
             </div>
         </footer>

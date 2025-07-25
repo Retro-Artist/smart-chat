@@ -15,8 +15,8 @@ class Logger {
         // Try to load config, fallback to default if not available
         $configFile = __DIR__ . '/../../config/config.php';
         if (file_exists($configFile)) {
-            $config = require $configFile;
-            $this->enabled = $config['app']['debug'] ?? true;
+            require_once $configFile;
+            $this->enabled = defined('SYSTEM_DEBUG') ? SYSTEM_DEBUG : true;
         } else {
             $this->enabled = true; // Default to enabled
         }

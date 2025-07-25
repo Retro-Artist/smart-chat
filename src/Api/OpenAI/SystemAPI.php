@@ -28,11 +28,11 @@ class SystemAPI {
         if (empty($this->apiKey)) {
             try {
                 if (file_exists(__DIR__ . '/../../config/config.php')) {
-                    $config = require __DIR__ . '/../../config/config.php';
-                    $this->apiKey = $config['openai']['api_key'] ?? '';
-                    $this->model = $config['openai']['model'] ?? $this->model;
-                    $this->maxTokens = $config['openai']['max_tokens'] ?? $this->maxTokens;
-                    $this->temperature = $config['openai']['temperature'] ?? $this->temperature;
+                    require_once __DIR__ . '/../../config/config.php';
+                    $this->apiKey = OPENAI_API_KEY ?? '';
+                    $this->model = OPENAI_MODEL ?? $this->model;
+                    $this->maxTokens = OPENAI_MAX_TOKENS ?? $this->maxTokens;
+                    $this->temperature = OPENAI_TEMPERATURE ?? $this->temperature;
                 }
             } catch (Exception $e) {
                 error_log("Config file loading error: " . $e->getMessage());
@@ -220,6 +220,7 @@ class SystemAPI {
             $result = $db->fetch("SELECT 1 as test");
             return $result ? 'connected' : 'disconnected';
         } catch (Exception $e) {
+            error_log('Database status check failed: ' . $e->getMessage());
             return 'error';
         }
     }
@@ -234,6 +235,7 @@ class SystemAPI {
             $response = $this->callOpenAI($payload);
             return isset($response['choices']) ? 'connected' : 'error';
         } catch (Exception $e) {
+            error_log('OpenAI status check failed: ' . $e->getMessage());
             return 'error';
         }
     }

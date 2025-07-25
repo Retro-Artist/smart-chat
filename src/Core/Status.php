@@ -12,25 +12,26 @@ class Status {
     /**
      * Test OpenAI API connectivity and authentication
      * 
-     * @param array $config Configuration array
      * @return array Status result with success/error information
      */
-    public static function testOpenAIAPI($config) {
-        if (!$config['openai']['enabled'] || empty($config['openai']['api_key']) || empty($config['openai']['api_url'])) {
+    public static function testOpenAIAPI() {
+        require_once __DIR__ . '/../../config/config.php';
+        
+        if (!OPENAI_API_ENABLED || empty(OPENAI_API_KEY) || empty(OPENAI_API_URL)) {
             return ['status' => 'disabled', 'message' => 'API disabled or missing credentials'];
         }
 
         $curl = curl_init();
         curl_setopt_array($curl, [
-            CURLOPT_URL => $config['openai']['api_url'],
+            CURLOPT_URL => OPENAI_API_URL,
             CURLOPT_RETURNTRANSFER => true,
             CURLOPT_TIMEOUT => 10,
             CURLOPT_HTTPHEADER => [
-                'Authorization: Bearer ' . $config['openai']['api_key'],
+                'Authorization: Bearer ' . OPENAI_API_KEY,
                 'Content-Type: application/json',
             ],
             CURLOPT_POSTFIELDS => json_encode([
-                'model' => $config['openai']['model'] ?: 'gpt-3.5-turbo',
+                'model' => OPENAI_MODEL ?: 'gpt-3.5-turbo',
                 'messages' => [['role' => 'user', 'content' => 'test']],
                 'max_tokens' => 5
             ]),
@@ -60,21 +61,22 @@ class Status {
     /**
      * Test Evolution API connectivity and authentication
      * 
-     * @param array $config Configuration array
      * @return array Status result with success/error information
      */
-    public static function testEvolutionAPI($config) {
-        if (!$config['evolutionAPI']['enabled'] || empty($config['evolutionAPI']['api_key']) || empty($config['evolutionAPI']['api_url'])) {
+    public static function testEvolutionAPI() {
+        require_once __DIR__ . '/../../config/config.php';
+        
+        if (!EVOLUTION_API_ENABLED || empty(EVOLUTION_API_KEY) || empty(EVOLUTION_API_URL)) {
             return ['status' => 'disabled', 'message' => 'API disabled or missing credentials'];
         }
 
         $curl = curl_init();
         curl_setopt_array($curl, [
-            CURLOPT_URL => rtrim($config['evolutionAPI']['api_url'], '/'),
+            CURLOPT_URL => rtrim(EVOLUTION_API_URL, '/'),
             CURLOPT_RETURNTRANSFER => true,
             CURLOPT_TIMEOUT => 10,
             CURLOPT_HTTPHEADER => [
-                'apikey: ' . $config['evolutionAPI']['api_key'],
+                'apikey: ' . EVOLUTION_API_KEY,
                 'Content-Type: application/json',
             ],
             CURLOPT_CUSTOMREQUEST => 'GET',
@@ -101,10 +103,11 @@ class Status {
     /**
      * Setup and test database connection
      * 
-     * @param array $config Configuration array
      * @return array Database connection result and information
      */
-    public static function setupDatabaseConnection($config) {
+    public static function setupDatabaseConnection() {
+        require_once __DIR__ . '/../../config/config.php';
+        
         $result = [
             'connection' => null,
             'connected' => false,
@@ -112,7 +115,7 @@ class Status {
             'notes' => [],
             'tableExists' => false,
             'mysqlVersion' => null,
-            'dbname' => $config['database']['database'],
+            'dbname' => DB_DATABASE,
             'config_loaded' => true
         ];
 
@@ -122,12 +125,12 @@ class Status {
                 try {
                     $dsn = sprintf(
                         "mysql:host=%s;port=%d;dbname=%s;charset=utf8mb4",
-                        $config['database']['host'],
-                        $config['database']['port'],
-                        $config['database']['database']
+                        DB_HOST,
+                        DB_PORT,
+                        DB_DATABASE
                     );
                     
-                    $result['connection'] = new PDO($dsn, $config['database']['username'], $config['database']['password'], [
+                    $result['connection'] = new PDO($dsn, DB_USERNAME, DB_PASSWORD, [
                         PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
                         PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
                         PDO::ATTR_EMULATE_PREPARES => false,
@@ -146,7 +149,7 @@ class Status {
                     break;
                 } catch (PDOException $e) {
                     if (strpos($e->getMessage(), 'Unknown database') !== false) {
-                        $result['error'] = "Database \"{$config['database']['database']}\" does not exist yet!";
+                        $result['error'] = "Database \"" . DB_DATABASE . "\" does not exist yet!";
                         break;
                     }
 
@@ -161,39 +164,23 @@ class Status {
         return $result;
     }
 
-    /**
-     * Check if configuration section has meaningful values
-     * 
-     * @param array $section Configuration section to validate
-     * @return bool True if section has valid values
-     */
-    public static function hasValidConfig($section) {
-        if (!is_array($section)) return false;
-        
-        foreach ($section as $key => $value) {
-            // Skip boolean values and check for meaningful string/numeric values
-            if (is_bool($value)) continue;
-            if (is_string($value) && !empty(trim($value))) return true;
-            if (is_numeric($value) && $value > 0) return true;
-        }
-        return false;
-    }
 
     /**
      * Check overall configuration status
      * 
-     * @param array $config Full configuration array
      * @return array Configuration status information
      */
-    public static function checkConfigurationStatus($config) {
+    public static function checkConfigurationStatus() {
+        require_once __DIR__ . '/../../config/config.php';
+        
         return [
             'env_loaded' => file_exists(__DIR__ . '/../../.env'),
-            'config_accessible' => is_array($config),
+            'config_accessible' => defined('SYSTEM_NAME'),
             'required_keys' => [
-                'database' => isset($config['database']) && self::hasValidConfig($config['database']),
-                'app' => isset($config['app']) && self::hasValidConfig($config['app']),
-                'evolutionAPI' => isset($config['evolutionAPI']) && self::hasValidConfig($config['evolutionAPI']),
-                'openai' => isset($config['openai']) && self::hasValidConfig($config['openai'])
+                'database' => defined('DB_HOST') && !empty(DB_HOST),
+                'app' => defined('SYSTEM_NAME') && !empty(SYSTEM_NAME),
+                'evolutionAPI' => defined('EVOLUTION_API_URL') && !empty(EVOLUTION_API_URL),
+                'openai' => defined('OPENAI_API_URL') && !empty(OPENAI_API_URL)
             ]
         ];
     }
