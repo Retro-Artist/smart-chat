@@ -20,7 +20,7 @@ class InstanceManager {
         $this->evolutionAPI = new EvolutionAPI();
         $this->instanceModel = new WhatsAppInstance();
         $this->syncLogModel = new WhatsAppSyncLog();
-        $this->redis = Redis::getInstance();
+        $this->redis = RedisManager::getInstance();
         $this->queue = new MessageQueue();
     }
     

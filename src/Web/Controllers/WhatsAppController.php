@@ -882,7 +882,7 @@ class WhatsAppController {
             ignore_user_abort(false);
             
             require_once __DIR__ . '/../../Core/Redis.php';
-            $redis = Redis::getInstance();
+            $redis = RedisManager::getInstance();
             $connectionCacheKey = "connection:{$instance['instance_name']}";
             $lastSentState = null;
             $maxDuration = 300; // 5 minutes max connection
@@ -1030,7 +1030,7 @@ class WhatsAppController {
         $instanceName = $instance['instance_name'];
         
         require_once __DIR__ . '/../../Core/Redis.php';
-        $redis = Redis::getInstance();
+        $redis = RedisManager::getInstance();
         $cacheKey = "qr:{$instanceName}";
         
         try {
@@ -1199,7 +1199,7 @@ class WhatsAppController {
     private function getInstanceConnectionStatus($instance, $useCache = true) {
         try {
             require_once __DIR__ . '/../../Core/Redis.php';
-            $redis = Redis::getInstance();
+            $redis = RedisManager::getInstance();
             $cacheKey = "connection:{$instance['instance_name']}";
             
             // Try cache first if enabled

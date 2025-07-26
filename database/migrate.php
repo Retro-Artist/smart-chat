@@ -31,7 +31,7 @@ try {
     echo "Database connection established successfully!\n";
     
     // Path to the SQL file
-    $sqlFilePath = __DIR__ . '/database.sql';
+    $sqlFilePath = __DIR__ . '/smartchat.sql';
     
     if (!file_exists($sqlFilePath)) {
         throw new Exception("SQL file not found: {$sqlFilePath}");

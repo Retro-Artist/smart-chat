@@ -519,7 +519,7 @@ class WebhookHandler {
             
             // Cache the connection state for quick access
             require_once __DIR__ . '/../../Core/Redis.php';
-            $redis = Redis::getInstance();
+            $redis = RedisManager::getInstance();
             $instance = $this->instanceModel->findById($instanceId);
             if ($instance) {
                 $cacheKey = "connection:{$instance['instance_name']}";
@@ -572,7 +572,7 @@ class WebhookHandler {
     private function clearQRCache($instanceName) {
         try {
             require_once __DIR__ . '/../../Core/Redis.php';
-            $redis = Redis::getInstance();
+            $redis = RedisManager::getInstance();
             $qrCacheKey = "qr:{$instanceName}";
             $redis->delete($qrCacheKey);
             

@@ -3,18 +3,16 @@
 
 require_once __DIR__ . '/../../config/config.php';
 require_once __DIR__ . '/Logger.php';
+require_once __DIR__ . '/Database.php';
 
-class Redis {
+class RedisManager {
     private static $instance = null;
     private $redis;
     private $connected = false;
-    private $fallbackDir;
+    private $db;
     
     private function __construct() {
-        $this->fallbackDir = __DIR__ . '/../../temp/redis_fallback';
-        if (!is_dir($this->fallbackDir)) {
-            mkdir($this->fallbackDir, 0755, true);
-        }
+        $this->db = Database::getInstance();
         $this->connect();
     }
     
@@ -63,7 +61,9 @@ class Redis {
         }
         
         try {
-            return $this->redis->ping() === '+PONG';
+            $pong = $this->redis->ping();
+            // Redis extension can return different values: 'PONG', '+PONG', or 1 (true)
+            return $pong === 'PONG' || $pong === '+PONG' || $pong === 1 || $pong === true;
         } catch (Exception $e) {
             $this->connected = false;
             return false;
@@ -75,61 +75,83 @@ class Redis {
         $this->connect();
     }
     
-    // File-based fallback methods
-    private function getFilePath($key) {
-        $safeKey = preg_replace('/[^a-zA-Z0-9_\-\:]/', '_', $key);
-        return $this->fallbackDir . '/' . $safeKey . '.cache';
-    }
-    
-    private function fileSet($key, $value, $expiry = null) {
-        $filePath = $this->getFilePath($key);
-        $data = [
-            'value' => $value,
-            'expires' => $expiry ? time() + $expiry : null,
-            'created' => time()
-        ];
-        return file_put_contents($filePath, serialize($data)) !== false;
-    }
-    
-    private function fileGet($key) {
-        $filePath = $this->getFilePath($key);
-        if (!file_exists($filePath)) {
-            return null;
-        }
-        
-        $data = unserialize(file_get_contents($filePath));
-        if (!$data) {
-            return null;
-        }
-        
-        // Check expiry
-        if ($data['expires'] && time() > $data['expires']) {
-            unlink($filePath);
-            return null;
-        }
-        
-        return $data['value'];
-    }
-    
-    private function fileDelete($key) {
-        $filePath = $this->getFilePath($key);
-        return file_exists($filePath) ? unlink($filePath) : true;
-    }
-    
-    private function fileExists($key) {
-        $filePath = $this->getFilePath($key);
-        if (!file_exists($filePath)) {
+    // Database-based fallback methods
+    private function dbSet($key, $value, $expiry = null) {
+        try {
+            $expiresAt = $expiry ? date('Y-m-d H:i:s', time() + $expiry) : null;
+            
+            $this->db->query(
+                "INSERT INTO redis_fallback (cache_key, cache_value, expires_at) 
+                 VALUES (?, ?, ?) 
+                 ON DUPLICATE KEY UPDATE 
+                 cache_value = VALUES(cache_value), 
+                 expires_at = VALUES(expires_at), 
+                 updated_at = CURRENT_TIMESTAMP",
+                [$key, serialize($value), $expiresAt]
+            );
+            
+            return true;
+        } catch (Exception $e) {
+            Logger::getInstance()->error('Database fallback set failed: ' . $e->getMessage());
             return false;
         }
-        
-        // Check if expired
-        $data = unserialize(file_get_contents($filePath));
-        if ($data && $data['expires'] && time() > $data['expires']) {
-            unlink($filePath);
+    }
+    
+    private function dbGet($key) {
+        try {
+            $result = $this->db->query(
+                "SELECT cache_value, expires_at FROM redis_fallback 
+                 WHERE cache_key = ? AND (expires_at IS NULL OR expires_at > NOW())",
+                [$key]
+            );
+            
+            if (empty($result) || !is_array($result) || !isset($result[0])) {
+                return null;
+            }
+            
+            return unserialize($result[0]['cache_value']);
+        } catch (Exception $e) {
+            Logger::getInstance()->error('Database fallback get failed: ' . $e->getMessage());
+            return null;
+        }
+    }
+    
+    private function dbDelete($key) {
+        try {
+            $this->db->query(
+                "DELETE FROM redis_fallback WHERE cache_key = ?",
+                [$key]
+            );
+            return true;
+        } catch (Exception $e) {
+            Logger::getInstance()->error('Database fallback delete failed: ' . $e->getMessage());
             return false;
         }
-        
-        return true;
+    }
+    
+    private function dbExists($key) {
+        try {
+            $result = $this->db->query(
+                "SELECT 1 FROM redis_fallback 
+                 WHERE cache_key = ? AND (expires_at IS NULL OR expires_at > NOW())",
+                [$key]
+            );
+            
+            return !empty($result);
+        } catch (Exception $e) {
+            Logger::getInstance()->error('Database fallback exists check failed: ' . $e->getMessage());
+            return false;
+        }
+    }
+    
+    private function cleanupExpired() {
+        try {
+            $this->db->query(
+                "DELETE FROM redis_fallback WHERE expires_at IS NOT NULL AND expires_at <= NOW()"
+            );
+        } catch (Exception $e) {
+            Logger::getInstance()->error('Database fallback cleanup failed: ' . $e->getMessage());
+        }
     }
     
     // Public interface methods
@@ -143,7 +165,7 @@ class Redis {
             }
         }
         
-        return $this->fileSet($key, $value, $expiry);
+        return $this->dbSet($key, $value, $expiry);
     }
     
     public function get($key) {
@@ -153,7 +175,7 @@ class Redis {
             return $value !== false ? $this->unserialize($value) : null;
         }
         
-        return $this->fileGet($key);
+        return $this->dbGet($key);
     }
     
     public function delete($key) {
@@ -165,7 +187,7 @@ class Redis {
             $success1 = $this->redis->del($prefixedKey);
         }
         
-        $success2 = $this->fileDelete($key);
+        $success2 = $this->dbDelete($key);
         
         return $success1 && $success2;
     }
@@ -176,7 +198,7 @@ class Redis {
             return $this->redis->exists($prefixedKey);
         }
         
-        return $this->fileExists($key);
+        return $this->dbExists($key);
     }
     
     public function expire($key, $seconds) {
@@ -185,10 +207,10 @@ class Redis {
             return $this->redis->expire($prefixedKey, $seconds);
         }
         
-        // For file fallback, we need to update the existing entry
-        $value = $this->fileGet($key);
+        // For database fallback, we need to update the existing entry
+        $value = $this->dbGet($key);
         if ($value !== null) {
-            return $this->fileSet($key, $value, $seconds);
+            return $this->dbSet($key, $value, $seconds);
         }
         
         return false;
@@ -201,16 +223,10 @@ class Redis {
             return $this->redis->lpush($prefixedKey, $this->serialize($value));
         }
         
-        // File-based queue fallback
-        $queueFile = $this->getFilePath($key . '_queue');
-        $queue = [];
-        
-        if (file_exists($queueFile)) {
-            $queue = unserialize(file_get_contents($queueFile)) ?: [];
-        }
-        
+        // Database-based queue fallback
+        $queue = $this->dbGet($key . '_queue') ?: [];
         array_unshift($queue, $value);
-        return file_put_contents($queueFile, serialize($queue)) !== false;
+        return $this->dbSet($key . '_queue', $queue);
     }
     
     public function rpop($key) {
@@ -220,19 +236,14 @@ class Redis {
             return $value !== false ? $this->unserialize($value) : null;
         }
         
-        // File-based queue fallback
-        $queueFile = $this->getFilePath($key . '_queue');
-        if (!file_exists($queueFile)) {
-            return null;
-        }
-        
-        $queue = unserialize(file_get_contents($queueFile)) ?: [];
+        // Database-based queue fallback
+        $queue = $this->dbGet($key . '_queue') ?: [];
         if (empty($queue)) {
             return null;
         }
         
         $value = array_pop($queue);
-        file_put_contents($queueFile, serialize($queue));
+        $this->dbSet($key . '_queue', $queue);
         
         return $value;
     }
@@ -254,16 +265,13 @@ class Redis {
             return null;
         }
         
-        // File-based blocking pop (simplified, non-blocking)
+        // Database-based blocking pop (simplified, non-blocking)
         foreach ($keys as $key) {
-            $queueFile = $this->getFilePath($key . '_queue');
-            if (file_exists($queueFile)) {
-                $queue = unserialize(file_get_contents($queueFile)) ?: [];
-                if (!empty($queue)) {
-                    $value = array_shift($queue);
-                    file_put_contents($queueFile, serialize($queue));
-                    return [$key, $value];
-                }
+            $queue = $this->dbGet($key . '_queue') ?: [];
+            if (!empty($queue)) {
+                $value = array_shift($queue);
+                $this->dbSet($key . '_queue', $queue);
+                return [$key, $value];
             }
         }
         
@@ -276,12 +284,7 @@ class Redis {
             return $this->redis->llen($prefixedKey);
         }
         
-        $queueFile = $this->getFilePath($key . '_queue');
-        if (!file_exists($queueFile)) {
-            return 0;
-        }
-        
-        $queue = unserialize(file_get_contents($queueFile)) ?: [];
+        $queue = $this->dbGet($key . '_queue') ?: [];
         return count($queue);
     }
     
@@ -291,9 +294,9 @@ class Redis {
             return $this->redis->incr($prefixedKey);
         }
         
-        $value = $this->fileGet($key) ?: 0;
+        $value = $this->dbGet($key) ?: 0;
         $newValue = intval($value) + 1;
-        $this->fileSet($key, $newValue);
+        $this->dbSet($key, $newValue);
         return $newValue;
     }
     
@@ -303,9 +306,9 @@ class Redis {
             return $this->redis->decr($prefixedKey);
         }
         
-        $value = $this->fileGet($key) ?: 0;
+        $value = $this->dbGet($key) ?: 0;
         $newValue = intval($value) - 1;
-        $this->fileSet($key, $newValue);
+        $this->dbSet($key, $newValue);
         return $newValue;
     }
     
@@ -316,9 +319,9 @@ class Redis {
             return $this->redis->hset($prefixedKey, $field, $this->serialize($value));
         }
         
-        $hash = $this->fileGet($key . '_hash') ?: [];
+        $hash = $this->dbGet($key . '_hash') ?: [];
         $hash[$field] = $value;
-        return $this->fileSet($key . '_hash', $hash);
+        return $this->dbSet($key . '_hash', $hash);
     }
     
     public function hget($key, $field) {
@@ -328,7 +331,7 @@ class Redis {
             return $value !== false ? $this->unserialize($value) : null;
         }
         
-        $hash = $this->fileGet($key . '_hash') ?: [];
+        $hash = $this->dbGet($key . '_hash') ?: [];
         return $hash[$field] ?? null;
     }
     
@@ -345,7 +348,7 @@ class Redis {
             return $result;
         }
         
-        return $this->fileGet($key . '_hash') ?: [];
+        return $this->dbGet($key . '_hash') ?: [];
     }
     
     public function hdel($key, $field) {
@@ -354,10 +357,10 @@ class Redis {
             return $this->redis->hdel($prefixedKey, $field);
         }
         
-        $hash = $this->fileGet($key . '_hash') ?: [];
+        $hash = $this->dbGet($key . '_hash') ?: [];
         if (isset($hash[$field])) {
             unset($hash[$field]);
-            return $this->fileSet($key . '_hash', $hash);
+            return $this->dbSet($key . '_hash', $hash);
         }
         
         return true;
@@ -370,12 +373,11 @@ class Redis {
             $success1 = true;
         }
         
-        // Clear fallback files
-        $files = glob($this->fallbackDir . '/*');
-        foreach ($files as $file) {
-            if (is_file($file)) {
-                unlink($file);
-            }
+        // Clear database fallback
+        try {
+            $this->db->query("DELETE FROM redis_fallback");
+        } catch (Exception $e) {
+            Logger::getInstance()->error('Database fallback flush failed: ' . $e->getMessage());
         }
         
         return $success1;
@@ -397,6 +399,11 @@ class Redis {
             } catch (Exception $e) {
                 // Ignore errors during cleanup
             }
+        }
+        
+        // Clean up expired entries periodically
+        if (rand(1, 100) <= 5) { // 5% chance
+            $this->cleanupExpired();
         }
     }
 }

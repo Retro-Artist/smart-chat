@@ -21,7 +21,7 @@ class MessageQueue {
     const STATUS_RETRY = 'retry';
     
     public function __construct() {
-        $this->redis = Redis::getInstance();
+        $this->redis = RedisManager::getInstance();
         $this->db = Database::getInstance();
     }
     
