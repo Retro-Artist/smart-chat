@@ -78,7 +78,7 @@
             WhatsApp Web
         </h1>
         <p class="text-theme-sm text-gray-600 dark:text-gray-400">
-            <?= ($is_first_login ?? false) ? 'Connect your WhatsApp account to get started' : 'Reconnect your WhatsApp account' ?>
+            Scan the QR code below to connect your WhatsApp
         </p>
     </div>
 </div>
@@ -156,9 +156,9 @@
                     $statusIcon = '<svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>';
                     break;
                 case 'no_instance':
-                    $statusMessage = 'No WhatsApp Instance';
+                    $statusMessage = 'Setting up WhatsApp...';
                     $statusColor = 'text-blue-600 dark:text-blue-400';
-                    $statusIcon = '<svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path></svg>';
+                    $statusIcon = '<svg class="animate-spin w-5 h-5 mr-2" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>';
                     break;
                 default:
                     $statusMessage = 'Unknown Status';
@@ -177,21 +177,7 @@
         <!-- QR Code Container -->
         <div id="qr-container" class="relative mb-6">
             
-            <?php if (($connection_state ?? 'unknown') === 'no_instance'): ?>
-                <!-- No Instance Message -->
-                <div class="w-64 h-64 bg-blue-50 dark:bg-blue-900/20 rounded-lg flex flex-col items-center justify-center border-2 border-dashed border-blue-300 dark:border-blue-600">
-                    <svg class="w-16 h-16 text-blue-400 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/>
-                    </svg>
-                    <p class="text-blue-600 dark:text-blue-400 text-center text-sm font-medium mb-2">
-                        No WhatsApp Instance Found
-                    </p>
-                    <p class="text-blue-500 dark:text-blue-300 text-center text-xs">
-                        Create an instance to get started
-                    </p>
-                </div>
-                
-            <?php elseif (isset($qr_code) && $qr_code): ?>
+            <?php if (isset($qr_code) && $qr_code): ?>
                 <!-- QR Code Display -->
                 <img src="<?= htmlspecialchars($qr_code) ?>" 
                      class="w-64 h-64 rounded-lg border border-gray-200 dark:border-gray-600" 
@@ -210,30 +196,10 @@
             <?php endif; ?>
         </div>
         
-        <!-- Action Forms - Server-side PHP forms instead of JavaScript -->
+        <!-- Action Forms - Simplified for automatic behavior -->
         <div class="flex flex-col space-y-4 w-full max-w-xs">
             
-            <?php if (($connection_state ?? 'unknown') === 'no_instance'): ?>
-                <!-- Create Instance Form -->
-                <form method="POST" action="/whatsapp/connect" class="w-full">
-                    <input type="hidden" name="action" value="create_instance">
-                    <button type="submit" 
-                            class="w-full bg-green-600 hover:bg-green-700 disabled:bg-gray-400 text-white font-medium py-3 px-6 rounded-lg transition-colors shadow-theme-sm">
-                        Create WhatsApp Instance
-                    </button>
-                </form>
-                
-            <?php elseif (!isset($qr_code) || !$qr_code): ?>
-                <!-- Generate QR Form -->
-                <form method="POST" action="/whatsapp/connect" class="w-full">
-                    <input type="hidden" name="action" value="generate_qr">
-                    <button type="submit" 
-                            class="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white font-medium py-3 px-6 rounded-lg transition-colors shadow-theme-sm">
-                        Generate QR Code
-                    </button>
-                </form>
-                
-            <?php else: ?>
+            <?php if (isset($qr_code) && $qr_code): ?>
                 <!-- Refresh QR Form -->
                 <form method="POST" action="/whatsapp/connect" class="w-full">
                     <input type="hidden" name="action" value="refresh_qr">
@@ -283,8 +249,7 @@ setTimeout(function() {
  * PHP forms handle actions instead of AJAX requests
  */
 
-// Initialize webhook-driven connection monitoring if QR code exists
-<?php if (isset($qr_code) && $qr_code && ($connection_state ?? 'unknown') === 'connecting'): ?>
+// Initialize webhook-driven connection monitoring for real-time updates
 // Start Server-Sent Events connection for real-time webhook updates
 const eventSource = new EventSource('/whatsapp/connectionStatusStream');
 
@@ -301,6 +266,13 @@ eventSource.onmessage = function(event) {
         setTimeout(() => {
             window.location.href = data.redirect_url;
         }, 2000);
+    }
+    
+    // Refresh page if QR code was generated and we don't have one yet
+    if (data.state === 'connecting' && !document.querySelector('#qr-container img')) {
+        setTimeout(() => {
+            window.location.reload();
+        }, 1000);
     }
 };
 
@@ -325,7 +297,6 @@ window.addEventListener('beforeunload', function() {
         eventSource.close();
     }
 });
-<?php endif; ?>
 
 // Utility functions for UI updates
 function updateConnectionStatus(state) {

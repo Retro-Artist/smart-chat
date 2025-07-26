@@ -150,19 +150,73 @@ class AuthController {
             $instance = $instanceModel->findByUserId($userId);
             
             if (!$instance) {
-                // No instance exists - redirect to WhatsApp connect page 
-                // where user can manually create an instance if needed
-                $_SESSION['connection_state'] = 'no_instance';
-                Helpers::redirect('/whatsapp/connect?state=no_instance');
+                // Auto-create WhatsApp instance for new users (WhatsApp Web behavior)
+                try {
+                    require_once __DIR__ . '/../../Api/WhatsApp/InstanceManager.php';
+                    $instanceManager = new InstanceManager();
+                    
+                    Logger::getInstance()->info("Auto-creating WhatsApp instance for user", [
+                        'user_id' => $userId
+                    ]);
+                    
+                    // Create instance automatically
+                    $instance = $instanceManager->createInstance($userId, null);
+                    
+                    // Set state for newly created instance
+                    $_SESSION['connection_state'] = 'connecting';
+                    $_SESSION['whatsapp_first_login'] = true;
+                    
+                    Logger::getInstance()->info("WhatsApp instance auto-created successfully", [
+                        'user_id' => $userId,
+                        'instance_id' => $instance['id']
+                    ]);
+                    
+                    // Redirect to connect page to show QR code
+                    Helpers::redirect('/whatsapp/connect?state=connecting&auto_created=1');
+                    
+                } catch (Exception $e) {
+                    Logger::getInstance()->error("Failed to auto-create WhatsApp instance: " . $e->getMessage());
+                    $_SESSION['connection_state'] = 'no_instance';
+                    Helpers::redirect('/whatsapp/connect?error=' . urlencode('Failed to create WhatsApp instance: ' . $e->getMessage()));
+                }
             } else {
-                // Check real-time connection state from Evolution API
+                // Check if instance actually exists in Evolution API first
                 $evolutionAPI = new EvolutionAPI();
                 $connectionState = 'unknown';
                 
                 try {
-                    $connectionState = $evolutionAPI->getConnectionState($instance['instance_name']);
+                    // Check if instance exists in Evolution API
+                    if (!$evolutionAPI->instanceExists($instance['instance_name'])) {
+                        Logger::getInstance()->warning("Instance exists in database but not in Evolution API, recreating", [
+                            'instance_id' => $instance['id'],
+                            'instance_name' => $instance['instance_name'],
+                            'user_id' => $userId
+                        ]);
+                        
+                        // Delete database record and recreate the instance
+                        require_once __DIR__ . '/../../Api/WhatsApp/InstanceManager.php';
+                        $instanceManager = new InstanceManager();
+                        
+                        // Delete from database
+                        $instanceModel = new WhatsAppInstance();
+                        $instanceModel->delete($instance['id']);
+                        
+                        // Recreate instance
+                        $instance = $instanceManager->createInstance($userId, null);
+                        $connectionState = 'connecting';
+                        $_SESSION['whatsapp_instance_recreated'] = true;
+                        
+                        Logger::getInstance()->info("WhatsApp instance recreated successfully", [
+                            'old_instance_id' => $instance['id'] ?? 'unknown',
+                            'new_instance_id' => $instance['id'],
+                            'user_id' => $userId
+                        ]);
+                    } else {
+                        // Instance exists, get its connection state
+                        $connectionState = $evolutionAPI->getConnectionState($instance['instance_name']);
+                    }
                 } catch (Exception $e) {
-                    error_log("Failed to get connection state: " . $e->getMessage());
+                    Logger::getInstance()->error("Failed to validate/get connection state: " . $e->getMessage());
                     $connectionState = 'unknown';
                 }
                 

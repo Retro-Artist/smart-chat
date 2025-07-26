@@ -49,11 +49,23 @@ class EvolutionAPI {
     }
     
     public function connectInstance($instanceName) {
-        return $this->makeRequest('GET', "/instance/connect/{$instanceName}");
+        $response = $this->makeRequest('GET', "/instance/connect/{$instanceName}");
+        
+        // Add debug logging for QR code response
+        Logger::getInstance()->info("Connect instance response received", [
+            'instance_name' => $instanceName,
+            'response_keys' => array_keys($response ?? []),
+            'has_base64' => isset($response['base64']),
+            'has_qrcode' => isset($response['qrcode']),
+            'has_qr' => isset($response['qr']),
+            'response_structure' => $this->getResponseStructure($response)
+        ]);
+        
+        return $response;
     }
     
     public function restartInstance($instanceName) {
-        return $this->makeRequest('PUT', "/instance/restart/{$instanceName}");
+        return $this->makeRequest('POST', "/instance/restart/{$instanceName}");
     }
     
     public function logoutInstance($instanceName) {
@@ -378,9 +390,53 @@ class EvolutionAPI {
             
             return 'unknown';
         } catch (Exception $e) {
+            // Check if instance doesn't exist (404 error)
+            if (strpos($e->getMessage(), 'HTTP 404') !== false || 
+                strpos($e->getMessage(), 'does not exist') !== false) {
+                Logger::getInstance()->warning("Instance {$instanceName} does not exist in Evolution API");
+                return 'not_found';
+            }
+            
             Logger::getInstance()->error("Failed to get connection state for {$instanceName}: " . $e->getMessage());
             return 'unknown';
         }
+    }
+    
+    /**
+     * Check if an instance exists in Evolution API
+     */
+    public function instanceExists($instanceName) {
+        try {
+            // Use connectionState endpoint as it gives clearer error messages
+            $this->makeRequest('GET', "/instance/connectionState/{$instanceName}");
+            return true; // If no exception, instance exists
+        } catch (Exception $e) {
+            if (strpos($e->getMessage(), 'HTTP 404') !== false || 
+                strpos($e->getMessage(), 'does not exist') !== false) {
+                Logger::getInstance()->info("Instance {$instanceName} does not exist in Evolution API");
+                return false;
+            }
+            // If it's another error, assume it exists but has issues
+            Logger::getInstance()->warning("Cannot determine if instance {$instanceName} exists: " . $e->getMessage());
+            return true;
+        }
+    }
+    
+    private function getResponseStructure($response, $depth = 0) {
+        if ($depth > 3 || !is_array($response)) {
+            return is_array($response) ? '[Array]' : gettype($response);
+        }
+        
+        $structure = [];
+        foreach ($response as $key => $value) {
+            if (is_array($value)) {
+                $structure[$key] = $this->getResponseStructure($value, $depth + 1);
+            } else {
+                $structure[$key] = gettype($value);
+            }
+        }
+        
+        return $structure;
     }
     
 }

@@ -491,6 +491,8 @@ class WebhookHandler {
             case 'failed':
             case 'timeout':
                 return 'failed';
+            case 'not_found':
+                return 'not_found';
             default:
                 return 'unknown';
         }
@@ -522,6 +524,15 @@ class WebhookHandler {
             if ($instance) {
                 $cacheKey = "connection:{$instance['instance_name']}";
                 $redis->set($cacheKey, $state, 300); // Cache for 5 minutes
+                
+                // Update session authentication state for the user
+                require_once __DIR__ . '/../../Core/Security.php';
+                Security::updateWhatsAppAuthState($instance['user_id'], $state);
+                
+                Logger::getInstance()->info("Updated user session auth state", [
+                    'user_id' => $instance['user_id'],
+                    'state' => $state
+                ]);
             }
             
         } catch (Exception $e) {
@@ -539,15 +550,19 @@ class WebhookHandler {
     private function mapStateToDBStatus($state) {
         switch ($state) {
             case 'open':
-                return WhatsAppInstance::STATUS_CONNECTED;
+                return WhatsAppInstance::STATUS_CONNECTED; // 'connected'
             case 'connecting':
-                return WhatsAppInstance::STATUS_CONNECTING;
+                return WhatsAppInstance::STATUS_CONNECTING; // 'connecting'
             case 'close':
+                return WhatsAppInstance::STATUS_DISCONNECTED; // 'disconnected'
             case 'disconnected':
+                return WhatsAppInstance::STATUS_DISCONNECTED; // 'disconnected'
             case 'failed':
-                return WhatsAppInstance::STATUS_DISCONNECTED;
+                return WhatsAppInstance::STATUS_FAILED; // 'failed'
+            case 'not_found':
+                return WhatsAppInstance::STATUS_DISCONNECTED; // 'disconnected'
             default:
-                return WhatsAppInstance::STATUS_DISCONNECTED;
+                return WhatsAppInstance::STATUS_DISCONNECTED; // 'disconnected'
         }
     }
     

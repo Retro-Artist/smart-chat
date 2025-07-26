@@ -58,7 +58,7 @@ class WhatsAppController {
         $userId = $_SESSION['user_id'];
         $instance = $this->instanceModel->findByUserId($userId);
         $error = $_GET['error'] ?? null;
-        $currentState = $_GET['state'] ?? ($instance ? 'unknown' : 'no_instance');
+        $currentState = $_GET['state'] ?? 'unknown';
         $successMessage = $_GET['success'] ?? null;
         
         // Handle POST requests for server-side form processing
@@ -66,7 +66,81 @@ class WhatsAppController {
             return $this->handleConnectFormSubmission($userId, $instance);
         }
         
-        // Initialize data array for GET requests
+        // AUTO-CREATE INSTANCE if none exists (WhatsApp Web behavior)
+        if (!$instance) {
+            try {
+                Logger::getInstance()->info("Auto-creating WhatsApp instance for user on connect page", [
+                    'user_id' => $userId
+                ]);
+                
+                $instance = $this->instanceManager->createInstance($userId, null);
+                $currentState = 'connecting';
+                $_SESSION['whatsapp_first_login'] = true;
+                
+                Logger::getInstance()->info("WhatsApp instance auto-created on connect", [
+                    'user_id' => $userId,
+                    'instance_id' => $instance['id']
+                ]);
+                
+            } catch (Exception $e) {
+                Logger::getInstance()->error("Failed to auto-create instance on connect: " . $e->getMessage());
+                
+                // Show error and fallback to manual creation
+                $data = [
+                    'pageTitle' => 'Connect WhatsApp - Smart Chat',
+                    'instance' => null,
+                    'error' => 'Failed to create WhatsApp instance: ' . $e->getMessage(),
+                    'success' => null,
+                    'is_first_login' => true,
+                    'connection_state' => 'no_instance'
+                ];
+                
+                Helpers::loadView('wa_connect', $data);
+                return;
+            }
+        }
+        
+        // Validate instance exists in Evolution API and get real-time connection state
+        try {
+            $evolutionAPI = new EvolutionAPI();
+            
+            // First check if instance actually exists in Evolution API
+            if (!$evolutionAPI->instanceExists($instance['instance_name'])) {
+                Logger::getInstance()->warning("Instance exists in database but not in Evolution API, recreating", [
+                    'instance_id' => $instance['id'],
+                    'instance_name' => $instance['instance_name'],
+                    'user_id' => $userId
+                ]);
+                
+                // Delete database record and recreate the instance
+                $this->instanceModel->delete($instance['id']);
+                
+                // Recreate instance
+                $instance = $this->instanceManager->createInstance($userId, null);
+                $currentState = 'connecting';
+                $_SESSION['whatsapp_instance_recreated'] = true;
+                
+                Logger::getInstance()->info("WhatsApp instance recreated in connect method", [
+                    'new_instance_id' => $instance['id'],
+                    'user_id' => $userId
+                ]);
+            } else {
+                // Instance exists, get its connection state
+                $statusResult = $this->getInstanceConnectionStatus($instance, false);
+                $currentState = $statusResult['state'] ?? 'unknown';
+                
+                Logger::getInstance()->info("WhatsApp connection state checked", [
+                    'instance_id' => $instance['id'],
+                    'state' => $currentState
+                ]);
+            }
+            
+        } catch (Exception $e) {
+            Logger::getInstance()->error("Failed to validate/get connection state: " . $e->getMessage());
+            $currentState = 'unknown';
+        }
+        
+        // Initialize data array
         $data = [
             'pageTitle' => 'Connect WhatsApp - Smart Chat',
             'instance' => $instance,
@@ -76,39 +150,45 @@ class WhatsAppController {
             'connection_state' => $currentState
         ];
         
-        // If instance exists, get real-time connection state
-        if ($instance) {
-            try {
-                $statusResult = $this->getInstanceConnectionStatus($instance, true);
-                $currentState = $statusResult['state'] ?? 'unknown';
-                $data['connection_state'] = $currentState;
+        // AUTO-HANDLE DIFFERENT CONNECTION STATES (WhatsApp Web behavior)
+        switch ($currentState) {
+            case 'open':
+                // Already connected - auto-redirect to dashboard
+                $data['auto_redirect'] = true;
+                $data['redirect_url'] = '/dashboard';
+                $data['redirect_delay'] = 2000; // 2 seconds
+                break;
                 
-                // If already connected, auto-redirect to dashboard after brief display
-                if ($currentState === 'open') {
-                    $data['auto_redirect'] = true;
-                    $data['redirect_url'] = '/dashboard';
-                    $data['redirect_delay'] = 2000; // 2 seconds
+            case 'connecting':
+                // Generate QR code for connecting state
+                $qrResult = $this->handleQRGeneration($instance, false);
+                $data['qr_code'] = $qrResult['success'] ? $qrResult['qr_code'] : null;
+                if (!$qrResult['success']) {
+                    $data['error'] = $qrResult['error'] ?? 'Failed to generate QR code';
                 }
-            } catch (Exception $e) {
-                Logger::getInstance()->error("Failed to get real-time connection state: " . $e->getMessage());
-                $currentState = 'unknown';
-                $data['connection_state'] = $currentState;
-            }
-        }
-        
-        // Smart QR code management based on connection state
-        $qrData = null;
-        if ($instance && $currentState !== 'open') {
-            // Use unified QR generation function
-            $qrResult = $this->handleQRGeneration($instance, false);
-            $qrData = $qrResult['success'] ? $qrResult['qr_code'] : null;
-            
-            // Handle redirect case for already connected instances
-            if ($qrResult['success'] && isset($qrResult['should_redirect']) && $qrResult['should_redirect']) {
-                Helpers::redirect($qrResult['redirect_url']);
-                return;
-            }
-            $data['qr_code'] = $qrData;
+                break;
+                
+            case 'disconnected':
+            case 'failed':
+            case 'close':
+            case 'unknown':
+            default:
+                // Restart instance and generate fresh QR (WhatsApp Web behavior)
+                Logger::getInstance()->info("Auto-restarting instance for fresh QR", [
+                    'instance_id' => $instance['id'],
+                    'state' => $currentState
+                ]);
+                
+                $qrResult = $this->handleQRGeneration($instance, true); // Force refresh
+                $data['qr_code'] = $qrResult['success'] ? $qrResult['qr_code'] : null;
+                $data['connection_state'] = 'connecting'; // Update state to connecting
+                
+                if (!$qrResult['success']) {
+                    $data['error'] = $qrResult['error'] ?? 'Failed to generate QR code';
+                } else {
+                    $data['success'] = 'QR code generated. Scan with your phone to connect.';
+                }
+                break;
         }
         
         Helpers::loadView('wa_connect', $data);
@@ -205,7 +285,9 @@ class WhatsAppController {
             $qrResult = $this->handleQRGeneration($instance, true);
             
             if ($qrResult['success']) {
-                Helpers::redirect('/whatsapp/connect?success=' . urlencode('QR Code refreshed successfully! Scan with your phone.') . '&state=' . $qrResult['state'] . '&refreshed=1');
+                // Add timestamp to prevent browser caching
+                $timestamp = time();
+                Helpers::redirect('/whatsapp/connect?success=' . urlencode('QR Code refreshed successfully! Scan with your phone.') . '&state=' . $qrResult['state'] . '&refreshed=' . $timestamp);
             } else {
                 Helpers::redirect('/whatsapp/connect?error=' . urlencode($qrResult['error']) . '&state=' . ($qrResult['state'] ?? 'unknown'));
             }
@@ -832,9 +914,14 @@ class WhatsAppController {
                         
                         echo "data: " . json_encode($eventData) . "\n\n";
                         
-                        // Update session auth state
+                        // Update session auth state  
                         require_once __DIR__ . '/../../Core/Security.php';
                         Security::updateWhatsAppAuthState($userId, $currentState);
+                        
+                        // Also update session variables for immediate UI updates
+                        $_SESSION['connection_state'] = $currentState;
+                        $_SESSION['whatsapp_authenticated'] = ($currentState === 'open');
+                        $_SESSION['last_connection_check'] = time();
                         
                         $lastSentState = $currentState;
                         
@@ -947,12 +1034,24 @@ class WhatsAppController {
         $cacheKey = "qr:{$instanceName}";
         
         try {
+            // If force refresh is requested, clear cache regardless of state
+            if ($forceRefresh) {
+                Logger::getInstance()->info("Force refresh requested, clearing QR cache", [
+                    'instance_name' => $instanceName,
+                    'connection_state' => $connectionState
+                ]);
+                $redis->delete($cacheKey);
+            }
+            
             switch ($connectionState) {
                 case 'connecting':
                     // Use cached QR if available and not forced refresh
                     if (!$forceRefresh) {
                         $cachedQR = $redis->get($cacheKey);
                         if ($cachedQR) {
+                            Logger::getInstance()->info("Using cached QR code", [
+                                'instance_name' => $instanceName
+                            ]);
                             return [
                                 'success' => true,
                                 'qr_code' => $cachedQR,
@@ -968,32 +1067,118 @@ class WhatsAppController {
                 case 'failed':
                 case 'close':
                 default:
-                    // Clear cache and generate fresh QR
-                    $redis->delete($cacheKey);
+                    // Clear cache and generate fresh QR (unless already cleared by force refresh)
+                    if (!$forceRefresh) {
+                        $redis->delete($cacheKey);
+                    }
                     
-                    // Restart instance if in failed state
-                    if (in_array($connectionState, ['disconnected', 'failed'])) {
+                    // Restart instance if in failed/disconnected/close state
+                    if (in_array($connectionState, ['disconnected', 'failed', 'close'])) {
+                        Logger::getInstance()->info("Restarting instance before QR generation", [
+                            'instance_name' => $instanceName,
+                            'current_state' => $connectionState
+                        ]);
+                        
                         $evolutionAPI->restartInstance($instanceName);
-                        sleep(2); // Wait for restart
+                        sleep(3); // Wait a bit longer for restart to complete
+                        
+                        Logger::getInstance()->info("Instance restart completed", [
+                            'instance_name' => $instanceName
+                        ]);
                     }
                     
                     // Generate fresh QR
                     $response = $evolutionAPI->connectInstance($instanceName);
                     
+                    // Check multiple possible QR code fields in response
+                    $qrData = null;
                     if (isset($response['base64'])) {
                         $qrData = $response['base64'];
+                    } elseif (isset($response['qrcode'])) {
+                        $qrData = $response['qrcode'];
+                    } elseif (isset($response['qr'])) {
+                        $qrData = $response['qr'];
+                    } elseif (isset($response['code'])) {
+                        $qrData = $response['code'];
+                    }
+                    
+                    if ($qrData) {
+                        // Ensure QR data has proper base64 data URI format
+                        if (strpos($qrData, 'data:image') === false) {
+                            $qrData = 'data:image/png;base64,' . $qrData;
+                        }
+                        
                         $redis->set($cacheKey, $qrData, 120); // Cache for 2 minutes
+                        
+                        Logger::getInstance()->info("QR code generated successfully", [
+                            'instance_name' => $instanceName,
+                            'force_refresh' => $forceRefresh,
+                            'action' => $forceRefresh ? 'force_refreshed' : 'generated'
+                        ]);
                         
                         return [
                             'success' => true,
                             'qr_code' => $qrData,
                             'state' => 'connecting',
-                            'action' => 'generated',
+                            'action' => $forceRefresh ? 'force_refreshed' : 'generated',
                             'generated_at' => date('Y-m-d H:i:s'),
                             'expires_at' => date('Y-m-d H:i:s', time() + 120)
                         ];
                     } else {
-                        throw new Exception('No QR code received from Evolution API');
+                        // Handle special cases like {"count":0}
+                        if (isset($response['count']) && $response['count'] === 0) {
+                            Logger::getInstance()->warning('Evolution API returned count:0, instance may need time to initialize', [
+                                'instance_name' => $instanceName,
+                                'response' => $response
+                            ]);
+                            
+                            // Wait a moment and try restarting the instance
+                            sleep(2);
+                            $evolutionAPI->restartInstance($instanceName);
+                            sleep(3);
+                            
+                            // Try connecting again
+                            $retryResponse = $evolutionAPI->connectInstance($instanceName);
+                            $qrData = null;
+                            if (isset($retryResponse['base64'])) {
+                                $qrData = $retryResponse['base64'];
+                            } elseif (isset($retryResponse['qrcode'])) {
+                                $qrData = $retryResponse['qrcode'];
+                            } elseif (isset($retryResponse['qr'])) {
+                                $qrData = $retryResponse['qr'];
+                            } elseif (isset($retryResponse['code'])) {
+                                $qrData = $retryResponse['code'];
+                            }
+                            
+                            if ($qrData) {
+                                if (strpos($qrData, 'data:image') === false) {
+                                    $qrData = 'data:image/png;base64,' . $qrData;
+                                }
+                                
+                                $redis->set($cacheKey, $qrData, 120);
+                                
+                                Logger::getInstance()->info("QR code generated after retry", [
+                                    'instance_name' => $instanceName,
+                                    'force_refresh' => $forceRefresh
+                                ]);
+                                
+                                return [
+                                    'success' => true,
+                                    'qr_code' => $qrData,
+                                    'state' => 'connecting',
+                                    'action' => $forceRefresh ? 'force_refreshed_after_retry' : 'generated_after_retry',
+                                    'generated_at' => date('Y-m-d H:i:s'),
+                                    'expires_at' => date('Y-m-d H:i:s', time() + 120)
+                                ];
+                            }
+                        }
+                        
+                        Logger::getInstance()->error('No QR code found in Evolution API response', [
+                            'instance_name' => $instanceName,
+                            'response_keys' => array_keys($response ?? []),
+                            'response' => $response
+                        ]);
+                        throw new Exception('No QR code received from Evolution API. Response: ' . json_encode($response));
                     }
             }
             
@@ -1037,12 +1222,28 @@ class WhatsAppController {
             $evolutionAPI = new EvolutionAPI();
             $connectionState = $evolutionAPI->getConnectionState($instance['instance_name']);
             
+            // Handle case where instance doesn't exist in Evolution API
+            if ($connectionState === 'not_found') {
+                Logger::getInstance()->warning("Instance not found in Evolution API during status check", [
+                    'instance_id' => $instance['id'],
+                    'instance_name' => $instance['instance_name']
+                ]);
+                
+                return [
+                    'success' => false,
+                    'error' => 'Instance not found in Evolution API',
+                    'state' => 'not_found',
+                    'requires_recreation' => true
+                ];
+            }
+            
             // Cache the result
             $redis->set($cacheKey, $connectionState, 30);
             
             // Update database if status changed
-            if ($instance['status'] !== $connectionState) {
-                $this->instanceModel->updateStatus($instance['id'], $connectionState);
+            $dbStatus = $this->mapConnectionStateToDBStatus($connectionState);
+            if ($instance['status'] !== $dbStatus) {
+                $this->instanceModel->updateStatus($instance['id'], $dbStatus);
             }
             
             // Update session auth state
@@ -1083,6 +1284,28 @@ class WhatsAppController {
         $hourAgo = time() - 3600;
         
         return $lastSync < $hourAgo;
+    }
+    
+    /**
+     * Map connection states to database status constants
+     */
+    private function mapConnectionStateToDBStatus($state) {
+        switch ($state) {
+            case 'open':
+                return WhatsAppInstance::STATUS_CONNECTED; // 'connected'
+            case 'connecting':
+                return WhatsAppInstance::STATUS_CONNECTING; // 'connecting'
+            case 'close':
+                return WhatsAppInstance::STATUS_DISCONNECTED; // 'disconnected'
+            case 'disconnected':
+                return WhatsAppInstance::STATUS_DISCONNECTED; // 'disconnected'
+            case 'failed':
+                return WhatsAppInstance::STATUS_FAILED; // 'failed'
+            case 'not_found':
+                return WhatsAppInstance::STATUS_DISCONNECTED; // 'disconnected'
+            default:
+                return WhatsAppInstance::STATUS_DISCONNECTED; // 'disconnected'
+        }
     }
 }
 
