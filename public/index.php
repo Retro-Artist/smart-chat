@@ -46,6 +46,7 @@ $router->addWebRoute('GET', '/logout', 'AuthController@logout');
 if (defined('WHATSAPP_ENABLED') && WHATSAPP_ENABLED) {
     $router->addWebRoute('GET', '/whatsapp', 'WhatsAppController@index');
     $router->addWebRoute('GET', '/whatsapp/connect', 'WhatsAppController@connect');
+    $router->addWebRoute('POST', '/whatsapp/connect', 'WhatsAppController@connect');
     $router->addWebRoute('GET', '/whatsapp/chat', 'WhatsAppController@chat');
 }
 
@@ -81,6 +82,7 @@ if (defined('WHATSAPP_ENABLED') && WHATSAPP_ENABLED) {
     $router->addApiRoute('GET', '/api/whatsapp/status', 'WhatsAppController@checkStatus');
     $router->addApiRoute('GET', '/whatsapp/getConnectionState', 'WhatsAppController@getConnectionState');
     $router->addApiRoute('GET', '/whatsapp/pollConnectionStatus', 'WhatsAppController@pollConnectionStatus');
+    $router->addApiRoute('GET', '/whatsapp/connectionStatusStream', 'WhatsAppController@connectionStatusStream');
     $router->addApiRoute('POST', '/whatsapp/generateQR', 'WhatsAppController@generateQR');
     $router->addApiRoute('POST', '/whatsapp/createInstance', 'WhatsAppController@createInstance');
     $router->addApiRoute('POST', '/whatsapp/restartInstance', 'WhatsAppController@restartInstance');

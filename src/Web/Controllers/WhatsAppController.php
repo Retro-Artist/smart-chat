@@ -59,15 +59,22 @@ class WhatsAppController {
         $instance = $this->instanceModel->findByUserId($userId);
         $error = $_GET['error'] ?? null;
         $currentState = $_GET['state'] ?? 'unknown';
+        $successMessage = $_GET['success'] ?? null;
         
+        // Handle POST requests for server-side form processing
+        if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+            return $this->handleConnectFormSubmission($userId, $instance);
+        }
+        
+        // Initialize data array for GET requests
         $data = [
             'pageTitle' => 'Connect WhatsApp - Smart Chat',
             'instance' => $instance,
             'error' => $error,
+            'success' => $successMessage,
             'is_first_login' => isset($_SESSION['whatsapp_first_login']),
             'connection_state' => $currentState
         ];
-        
         
         // If instance exists, get real-time connection state
         if ($instance) {
@@ -86,6 +93,7 @@ class WhatsAppController {
             } catch (Exception $e) {
                 Logger::getInstance()->error("Failed to get real-time connection state: " . $e->getMessage());
                 $currentState = 'unknown';
+                $data['connection_state'] = $currentState;
             }
         }
         
@@ -179,6 +187,130 @@ class WhatsAppController {
     private function shouldRestartInstance($connectionState) {
         $restartStates = ['disconnected', 'failed', 'close'];
         return in_array($connectionState, $restartStates);
+    }
+    
+    /**
+     * Handle server-side form submissions for WhatsApp connection
+     */
+    private function handleConnectFormSubmission($userId, $instance) {
+        try {
+            $action = $_POST['action'] ?? '';
+            
+            switch ($action) {
+                case 'create_instance':
+                    return $this->handleCreateInstanceForm($userId);
+                    
+                case 'generate_qr':
+                    return $this->handleGenerateQRForm($instance);
+                    
+                case 'refresh_qr':
+                    return $this->handleRefreshQRForm($instance);
+                    
+                case 'check_status':
+                    return $this->handleCheckStatusForm($instance);
+                    
+                default:
+                    Helpers::redirect('/whatsapp/connect?error=' . urlencode('Invalid action'));
+                    return;
+            }
+            
+        } catch (Exception $e) {
+            Logger::getInstance()->error("Form submission error: " . $e->getMessage());
+            Helpers::redirect('/whatsapp/connect?error=' . urlencode('An error occurred. Please try again.'));
+        }
+    }
+    
+    /**
+     * Handle create instance form submission
+     */
+    private function handleCreateInstanceForm($userId) {
+        try {
+            $existingInstance = $this->instanceModel->findByUserId($userId);
+            if ($existingInstance) {
+                Helpers::redirect('/whatsapp/connect?error=' . urlencode('WhatsApp instance already exists'));
+                return;
+            }
+            
+            $instance = $this->instanceManager->createInstance($userId, null);
+            
+            Helpers::redirect('/whatsapp/connect?success=' . urlencode('WhatsApp instance created successfully! Generate a QR code to connect.'));
+            
+        } catch (Exception $e) {
+            Logger::getInstance()->error("Create instance form error: " . $e->getMessage());
+            Helpers::redirect('/whatsapp/connect?error=' . urlencode('Failed to create instance: ' . $e->getMessage()));
+        }
+    }
+    
+    /**
+     * Handle generate QR form submission
+     */
+    private function handleGenerateQRForm($instance) {
+        if (!$instance) {
+            Helpers::redirect('/whatsapp/connect?error=' . urlencode('No WhatsApp instance found'));
+            return;
+        }
+        
+        try {
+            $evolutionAPI = new EvolutionAPI();
+            $connectionState = $evolutionAPI->getConnectionState($instance['instance_name']);
+            
+            // If already connected, redirect to dashboard
+            if ($connectionState === 'open') {
+                require_once __DIR__ . '/../../Core/Security.php';
+                Security::updateWhatsAppAuthState($instance['user_id'], $connectionState);
+                Helpers::redirect('/dashboard');
+                return;
+            }
+            
+            // Use bulletproof QR generation workflow
+            $qrResult = $this->executeQRGenerationWorkflow($instance, $connectionState);
+            
+            if ($qrResult['success']) {
+                Helpers::redirect('/whatsapp/connect?success=' . urlencode('QR Code generated successfully! Scan with your phone.') . '&state=' . $qrResult['state']);
+            } else {
+                Helpers::redirect('/whatsapp/connect?error=' . urlencode($qrResult['error']) . '&state=' . ($qrResult['state'] ?? $connectionState));
+            }
+            
+        } catch (Exception $e) {
+            Logger::getInstance()->error("Generate QR form error: " . $e->getMessage());
+            Helpers::redirect('/whatsapp/connect?error=' . urlencode('Failed to generate QR code: ' . $e->getMessage()));
+        }
+    }
+    
+    /**
+     * Handle refresh QR form submission
+     */
+    private function handleRefreshQRForm($instance) {
+        return $this->handleGenerateQRForm($instance); // Same logic as generate
+    }
+    
+    /**
+     * Handle check status form submission
+     */
+    private function handleCheckStatusForm($instance) {
+        if (!$instance) {
+            Helpers::redirect('/whatsapp/connect?error=' . urlencode('No WhatsApp instance found'));
+            return;
+        }
+        
+        try {
+            $evolutionAPI = new EvolutionAPI();
+            $connectionState = $evolutionAPI->getConnectionState($instance['instance_name']);
+            
+            // Update session auth state
+            require_once __DIR__ . '/../../Core/Security.php';
+            Security::updateWhatsAppAuthState($instance['user_id'], $connectionState);
+            
+            if ($connectionState === 'open') {
+                Helpers::redirect('/dashboard');
+            } else {
+                Helpers::redirect('/whatsapp/connect?success=' . urlencode('Connection state: ' . $connectionState) . '&state=' . $connectionState);
+            }
+            
+        } catch (Exception $e) {
+            Logger::getInstance()->error("Check status form error: " . $e->getMessage());
+            Helpers::redirect('/whatsapp/connect?error=' . urlencode('Failed to check status: ' . $e->getMessage()));
+        }
     }
     
     public function chat() {
@@ -1062,6 +1194,130 @@ class WhatsAppController {
                 'error' => 'Failed to check connection status',
                 'state' => 'error'
             ]);
+        }
+    }
+    
+    /**
+     * Server-Sent Events endpoint for real-time webhook-driven updates
+     * This replaces JavaScript polling with webhook-driven real-time updates
+     */
+    public function connectionStatusStream() {
+        try {
+            if (!Helpers::isAuthenticated()) {
+                http_response_code(401);
+                echo json_encode(['error' => 'Unauthorized']);
+                return;
+            }
+            
+            $userId = $_SESSION['user_id'];
+            $instance = $this->instanceModel->findByUserId($userId);
+            
+            if (!$instance) {
+                http_response_code(404);
+                echo json_encode(['error' => 'No WhatsApp instance found']);
+                return;
+            }
+            
+            // Set SSE headers
+            header('Content-Type: text/event-stream');
+            header('Cache-Control: no-cache');
+            header('Connection: keep-alive');
+            header('X-Accel-Buffering: no'); // Disable nginx buffering
+            
+            // Prevent timeout
+            set_time_limit(0);
+            ignore_user_abort(false);
+            
+            require_once __DIR__ . '/../../Core/Redis.php';
+            $redis = Redis::getInstance();
+            $connectionCacheKey = "connection:{$instance['instance_name']}";
+            $lastSentState = null;
+            $maxDuration = 300; // 5 minutes max connection
+            $startTime = time();
+            
+            while (connection_status() === CONNECTION_NORMAL && (time() - $startTime) < $maxDuration) {
+                try {
+                    // Check for webhook-updated connection state in Redis
+                    $currentState = $redis->get($connectionCacheKey);
+                    
+                    if (!$currentState) {
+                        // Fallback to direct API check if no cached state
+                        $evolutionAPI = new EvolutionAPI();
+                        $currentState = $evolutionAPI->getConnectionState($instance['instance_name']);
+                        
+                        // Cache the state for webhook handler updates
+                        $redis->set($connectionCacheKey, $currentState, 300);
+                    }
+                    
+                    // Only send updates when state changes
+                    if ($currentState !== $lastSentState) {
+                        $eventData = [
+                            'state' => $currentState,
+                            'instance_name' => $instance['instance_name'],
+                            'timestamp' => time(),
+                            'should_redirect' => ($currentState === 'open'),
+                            'redirect_url' => ($currentState === 'open') ? '/dashboard' : null
+                        ];
+                        
+                        echo "data: " . json_encode($eventData) . "\n\n";
+                        
+                        // Update session auth state
+                        require_once __DIR__ . '/../../Core/Security.php';
+                        Security::updateWhatsAppAuthState($userId, $currentState);
+                        
+                        $lastSentState = $currentState;
+                        
+                        Logger::getInstance()->info("SSE: Connection state update sent", [
+                            'instance' => $instance['instance_name'],
+                            'state' => $currentState,
+                            'user_id' => $userId
+                        ]);
+                        
+                        // If connected, send final event and close connection
+                        if ($currentState === 'open') {
+                            echo "event: connected\n";
+                            echo "data: " . json_encode(['message' => 'Connection successful, redirecting...']) . "\n\n";
+                            ob_flush();
+                            flush();
+                            break;
+                        }
+                    }
+                    
+                    // Send heartbeat every 30 seconds
+                    if (time() % 30 === 0) {
+                        echo "event: heartbeat\n";
+                        echo "data: " . json_encode(['timestamp' => time()]) . "\n\n";
+                    }
+                    
+                    ob_flush();
+                    flush();
+                    
+                    // Wait 2 seconds before next check (webhook updates will be faster)
+                    sleep(2);
+                    
+                } catch (Exception $e) {
+                    Logger::getInstance()->error("SSE loop error: " . $e->getMessage());
+                    echo "event: error\n";
+                    echo "data: " . json_encode(['error' => 'Internal error']) . "\n\n";
+                    ob_flush();
+                    flush();
+                    break;
+                }
+            }
+            
+            // Send close event
+            echo "event: close\n";
+            echo "data: " . json_encode(['message' => 'Connection closed']) . "\n\n";
+            ob_flush();
+            flush();
+            
+        } catch (Exception $e) {
+            Logger::getInstance()->error('SSE endpoint error: ' . $e->getMessage());
+            http_response_code(500);
+            echo "event: error\n";
+            echo "data: " . json_encode(['error' => 'Server error']) . "\n\n";
+            ob_flush();
+            flush();
         }
     }
 }

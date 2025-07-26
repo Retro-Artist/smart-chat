@@ -17,29 +17,64 @@ class WebhookHandler {
     
     public function __construct() {
         $this->startTime = microtime(true);
-        $this->queue = new MessageQueue();
-        $this->instanceModel = new WhatsAppInstance();
-        $this->instanceManager = new InstanceManager();
+        Logger::getInstance()->info("WebhookHandler constructor started");
+        
+        try {
+            $this->queue = new MessageQueue();
+            Logger::getInstance()->info("MessageQueue initialized");
+            
+            $this->instanceModel = new WhatsAppInstance();
+            Logger::getInstance()->info("WhatsAppInstance model initialized");
+            
+            $this->instanceManager = new InstanceManager();
+            Logger::getInstance()->info("InstanceManager initialized");
+            
+            Logger::getInstance()->info("WebhookHandler constructor completed");
+        } catch (Exception $e) {
+            Logger::getInstance()->error("Error in WebhookHandler constructor", [
+                'error' => $e->getMessage(),
+                'file' => $e->getFile(),
+                'line' => $e->getLine()
+            ]);
+            throw $e;
+        }
     }
     
     public function handleWebhook($payload) {
         try {
+            Logger::getInstance()->info("Starting webhook validation", ['payload_keys' => array_keys($payload ?? [])]);
+            
             if (!$this->validateWebhook($payload)) {
+                Logger::getInstance()->warning("Webhook validation failed", ['payload' => $payload]);
                 $this->respondError('Invalid webhook payload', 400);
                 return;
             }
             
+            Logger::getInstance()->info("Webhook validation passed, parsing event");
             $event = $this->parseEvent($payload);
             if (!$event) {
+                Logger::getInstance()->warning("Event parsing failed", ['payload' => $payload]);
                 $this->respondError('Unable to parse event', 400);
                 return;
             }
             
+            Logger::getInstance()->info("Event parsed successfully, processing", ['event_type' => $event['event_type']]);
+            
+            // Test if we can even reach processEvent
+            Logger::getInstance()->info("About to call processEvent");
             $this->processEvent($event);
+            Logger::getInstance()->info("processEvent completed");
+            
+            Logger::getInstance()->info("Event processed successfully");
             $this->respondSuccess();
             
         } catch (Exception $e) {
-            Logger::getInstance()->error("Webhook processing error: " . $e->getMessage(), ['payload' => $payload]);
+            Logger::getInstance()->error("Webhook processing error: " . $e->getMessage(), [
+                'payload' => $payload,
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+                'trace' => $e->getTraceAsString()
+            ]);
             $this->respondError('Internal error', 500);
         }
     }
@@ -88,28 +123,42 @@ class WebhookHandler {
         $eventType = $event['event_type'];
         $instanceId = $event['instance_id'];
         
+        Logger::getInstance()->info("Processing event", ['event_type' => $eventType, 'instance_id' => $instanceId]);
+        
         switch ($eventType) {
             case 'MESSAGES_UPSERT':
+            case 'messages.upsert':
                 $this->handleMessagesUpsert($event);
                 break;
                 
             case 'MESSAGES_UPDATE':
+            case 'messages.update':
                 $this->handleMessagesUpdate($event);
                 break;
                 
             case 'CONTACTS_UPSERT':
+            case 'contacts.upsert':
                 $this->handleContactsUpsert($event);
                 break;
                 
             case 'CONNECTION_UPDATE':
+            case 'connection.update':
                 $this->handleConnectionUpdate($event);
                 break;
                 
             case 'PRESENCE_UPDATE':
+            case 'presence.update':
                 $this->handlePresenceUpdate($event);
                 break;
                 
+            case 'qrcode.updated':
+            case 'QRCODE_UPDATED':
+                Logger::getInstance()->info("QR code updated event received", ['instance_id' => $instanceId]);
+                $this->queueGenericEvent($event);
+                break;
+                
             default:
+                Logger::getInstance()->info("Processing generic event", ['event_type' => $eventType]);
                 $this->queueGenericEvent($event);
                 break;
         }
@@ -150,51 +199,73 @@ class WebhookHandler {
     }
     
     private function handleConnectionUpdate($event) {
-        $connectionData = $event['data'];
-        $state = $connectionData['state'] ?? 'unknown';
-        
-        // Normalize connection state to match our system states
-        $normalizedState = $this->normalizeConnectionState($state);
-        
-        // Log connection state change
-        Logger::getInstance()->info("Connection state update received", [
-            'instance_id' => $event['instance_id'],
-            'instance_name' => $event['instance_name'],
-            'raw_state' => $state,
-            'normalized_state' => $normalizedState,
-            'connection_data' => $connectionData
-        ]);
-        
-        // Update database immediately for critical states
-        $this->updateInstanceConnectionState($event['instance_id'], $normalizedState, $connectionData);
-        
-        // Queue for additional processing
-        $this->queue->pushHighPriority('connection_update', [
-            'instance_id' => $event['instance_id'],
-            'instance_name' => $event['instance_name'],
-            'state' => $normalizedState,
-            'raw_state' => $state,
-            'connection_data' => $connectionData,
-            'event_timestamp' => $event['timestamp']
-        ], $event['instance_id']);
-        
-        // Handle state-specific actions
-        switch ($normalizedState) {
-            case 'open':
-                $this->instanceManager->onInstanceConnected($event['instance_id'], $connectionData);
-                $this->clearQRCache($event['instance_name']);
-                break;
-                
-            case 'connecting':
-                Logger::getInstance()->info("Instance connecting", ['instance_name' => $event['instance_name']]);
-                break;
-                
-            case 'close':
-            case 'disconnected':
-            case 'failed':
-                $this->instanceManager->onInstanceDisconnected($event['instance_id']);
-                $this->clearQRCache($event['instance_name']);
-                break;
+        try {
+            Logger::getInstance()->info("Starting connection update handling", ['event_keys' => array_keys($event)]);
+            
+            $connectionData = $event['data'];
+            $state = $connectionData['state'] ?? 'unknown';
+            
+            Logger::getInstance()->info("Extracted connection data", ['state' => $state, 'data_keys' => array_keys($connectionData)]);
+            
+            // Normalize connection state to match our system states
+            $normalizedState = $this->normalizeConnectionState($state);
+            
+            Logger::getInstance()->info("State normalized", ['raw_state' => $state, 'normalized_state' => $normalizedState]);
+            
+            // Log connection state change
+            Logger::getInstance()->info("Connection state update received", [
+                'instance_id' => $event['instance_id'],
+                'instance_name' => $event['instance_name'],
+                'raw_state' => $state,
+                'normalized_state' => $normalizedState,
+                'connection_data' => $connectionData
+            ]);
+            
+            Logger::getInstance()->info("About to update database connection state");
+            // Update database immediately for critical states
+            $this->updateInstanceConnectionState($event['instance_id'], $normalizedState, $connectionData);
+            
+            Logger::getInstance()->info("About to queue connection update");
+            // Queue for additional processing
+            $this->queue->pushHighPriority('connection_update', [
+                'instance_id' => $event['instance_id'],
+                'instance_name' => $event['instance_name'],
+                'state' => $normalizedState,
+                'raw_state' => $state,
+                'connection_data' => $connectionData,
+                'event_timestamp' => $event['timestamp']
+            ], $event['instance_id']);
+            
+            Logger::getInstance()->info("About to handle state-specific actions", ['normalized_state' => $normalizedState]);
+            // Handle state-specific actions
+            switch ($normalizedState) {
+                case 'open':
+                    $this->instanceManager->onInstanceConnected($event['instance_id'], $connectionData);
+                    $this->clearQRCache($event['instance_name']);
+                    break;
+                    
+                case 'connecting':
+                    Logger::getInstance()->info("Instance connecting", ['instance_name' => $event['instance_name']]);
+                    break;
+                    
+                case 'close':
+                case 'disconnected':
+                case 'failed':
+                    $this->instanceManager->onInstanceDisconnected($event['instance_id']);
+                    $this->clearQRCache($event['instance_name']);
+                    break;
+            }
+            
+            Logger::getInstance()->info("Connection update handling completed successfully");
+            
+        } catch (Exception $e) {
+            Logger::getInstance()->error("Error in handleConnectionUpdate", [
+                'error' => $e->getMessage(),
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+                'event' => $event
+            ]);
+            throw $e; // Re-throw to be caught by main handler
         }
     }
     

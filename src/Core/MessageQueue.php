@@ -48,11 +48,11 @@ class MessageQueue {
                 }
             }
             
-            Logger::info("Job pushed to queue: {$queueName}", ['job_id' => $job['id'], 'priority' => $priority]);
+            Logger::getInstance()->info("Job pushed to queue: {$queueName}", ['job_id' => $job['id'], 'priority' => $priority]);
             return $job['id'];
             
         } catch (Exception $e) {
-            Logger::error("Failed to push job to queue: " . $e->getMessage());
+            Logger::getInstance()->error("Failed to push job to queue: " . $e->getMessage());
             throw $e;
         }
     }
@@ -81,14 +81,14 @@ class MessageQueue {
                     $this->updateDatabaseStatus($job['id'], self::STATUS_PROCESSING);
                 }
                 
-                Logger::info("Job popped from queue: {$queueName}", ['job_id' => $job['id']]);
+                Logger::getInstance()->info("Job popped from queue: {$queueName}", ['job_id' => $job['id']]);
                 return $job;
             }
             
             return null;
             
         } catch (Exception $e) {
-            Logger::error("Failed to pop job from queue: " . $e->getMessage());
+            Logger::getInstance()->error("Failed to pop job from queue: " . $e->getMessage());
             return null;
         }
     }
@@ -96,10 +96,10 @@ class MessageQueue {
     public function complete($jobId, $result = null) {
         try {
             $this->updateDatabaseStatus($jobId, self::STATUS_COMPLETED, null, $result);
-            Logger::info("Job completed successfully", ['job_id' => $jobId]);
+            Logger::getInstance()->info("Job completed successfully", ['job_id' => $jobId]);
             
         } catch (Exception $e) {
-            Logger::error("Failed to mark job as completed: " . $e->getMessage());
+            Logger::getInstance()->error("Failed to mark job as completed: " . $e->getMessage());
         }
     }
     
@@ -108,7 +108,7 @@ class MessageQueue {
             $job = $this->getJobFromDatabase($jobId);
             
             if (!$job) {
-                Logger::warning("Job not found in database", ['job_id' => $jobId]);
+                Logger::getInstance()->warning("Job not found in database", ['job_id' => $jobId]);
                 return;
             }
             
@@ -122,7 +122,7 @@ class MessageQueue {
                 $this->updateDatabaseStatus($jobId, self::STATUS_RETRY, $error);
                 $this->scheduleRetry($job, $scheduledAt, $attempts);
                 
-                Logger::info("Job scheduled for retry", [
+                Logger::getInstance()->info("Job scheduled for retry", [
                     'job_id' => $jobId,
                     'attempt' => $attempts,
                     'retry_in' => $retryDelay
@@ -130,11 +130,11 @@ class MessageQueue {
                 
             } else {
                 $this->updateDatabaseStatus($jobId, self::STATUS_FAILED, $error);
-                Logger::error("Job failed permanently", ['job_id' => $jobId, 'error' => $error]);
+                Logger::getInstance()->error("Job failed permanently", ['job_id' => $jobId, 'error' => $error]);
             }
             
         } catch (Exception $e) {
-            Logger::error("Failed to handle job failure: " . $e->getMessage());
+            Logger::getInstance()->error("Failed to handle job failure: " . $e->getMessage());
         }
     }
     
@@ -142,7 +142,7 @@ class MessageQueue {
         try {
             return $this->redis->llen($queueName);
         } catch (Exception $e) {
-            Logger::error("Failed to get queue length: " . $e->getMessage());
+            Logger::getInstance()->error("Failed to get queue length: " . $e->getMessage());
             return 0;
         }
     }
@@ -158,7 +158,7 @@ class MessageQueue {
                           $this->redis->llen(QUEUE_LOW_PRIORITY)
             ];
         } catch (Exception $e) {
-            Logger::error("Failed to get queue stats: " . $e->getMessage());
+            Logger::getInstance()->error("Failed to get queue stats: " . $e->getMessage());
             return ['high_priority' => 0, 'normal_priority' => 0, 'low_priority' => 0, 'total' => 0];
         }
     }
@@ -185,11 +185,11 @@ class MessageQueue {
                 ];
                 
                 $this->pushToRedis($jobData);
-                Logger::info("Scheduled job moved to queue", ['job_id' => $job['id']]);
+                Logger::getInstance()->info("Scheduled job moved to queue", ['job_id' => $job['id']]);
             }
             
         } catch (Exception $e) {
-            Logger::error("Failed to process scheduled jobs: " . $e->getMessage());
+            Logger::getInstance()->error("Failed to process scheduled jobs: " . $e->getMessage());
         }
     }
     
@@ -206,12 +206,12 @@ class MessageQueue {
             ]);
             
             $deletedCount = $result->rowCount();
-            Logger::info("Cleaned up old jobs", ['deleted_count' => $deletedCount]);
+            Logger::getInstance()->info("Cleaned up old jobs", ['deleted_count' => $deletedCount]);
             
             return $deletedCount;
             
         } catch (Exception $e) {
-            Logger::error("Failed to cleanup old jobs: " . $e->getMessage());
+            Logger::getInstance()->error("Failed to cleanup old jobs: " . $e->getMessage());
             return 0;
         }
     }

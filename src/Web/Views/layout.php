@@ -262,7 +262,7 @@
                     <?php
                     // Show connection status indicator if user is logged in
                     if (isset($_SESSION['user_id'])) {
-                        require_once __DIR__ . '/../Models/WhatsAppInstance.php';
+                        require_once __DIR__ . '/../../Api/Models/WhatsAppInstance.php';
                         $instanceModel = new WhatsAppInstance();
                         $instance = $instanceModel->findByUserId($_SESSION['user_id']);
                         if ($instance) {

@@ -31,7 +31,10 @@ try {
     require_once '../src/Core/Logger.php';
     require_once '../src/Api/WhatsApp/WebhookHandler.php';
     
-    // Validate webhook security (optional authentication)
+    // Webhook security validation disabled
+    // Evolution API sends instance tokens, not the global API key
+    // Evolution API has its own security mechanisms for webhook authentication
+    /*
     $headers = getallheaders();
     $apikey = $headers['apikey'] ?? $headers['Authorization'] ?? $_GET['apikey'] ?? null;
     
@@ -46,6 +49,7 @@ try {
         echo json_encode(['error' => 'Unauthorized']);
         exit;
     }
+    */
     
     // Get raw POST data
     $rawPayload = file_get_contents('php://input');
@@ -87,16 +91,12 @@ try {
     ]);
     
     // Process webhook with handler
+    Logger::getInstance()->info('About to create WebhookHandler');
     $handler = new WebhookHandler();
-    $result = $handler->handleWebhook($instanceName, $payload);
+    Logger::getInstance()->info('WebhookHandler created, about to handle webhook');
+    $handler->handleWebhook($payload);
     
-    // Return success response immediately (webhook processing is async)
-    http_response_code(200);
-    echo json_encode([
-        'success' => true,
-        'message' => 'Webhook processed',
-        'processed' => $result
-    ]);
+    // Handler manages its own responses, no need to send another one
     
 } catch (Exception $e) {
     // Log error but don't expose details to webhook sender

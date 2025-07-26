@@ -17,15 +17,16 @@ class WhatsAppInstance {
         $this->db = Database::getInstance();
     }
     
-    public function create($userId, $instanceName, $instanceId = null, $phoneNumber = null, $settings = null) {
+    public function create($userId, $instanceName, $instanceId = null, $phoneNumber = null, $settings = null, $token = null) {
         $sql = "INSERT INTO whatsapp_instances 
-                (user_id, instance_name, instance_id, phone_number, status, settings, created_at, updated_at) 
-                VALUES (?, ?, ?, ?, ?, ?, NOW(), NOW())";
+                (user_id, instance_name, instance_id, token, phone_number, status, settings, created_at, updated_at) 
+                VALUES (?, ?, ?, ?, ?, ?, ?, NOW(), NOW())";
         
         $params = [
             $userId,
             $instanceName,
             $instanceId,
+            $token,
             $phoneNumber,
             self::STATUS_CREATING,
             $settings ? json_encode($settings) : null
