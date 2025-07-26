@@ -3,7 +3,7 @@
 -- https://www.phpmyadmin.net/
 --
 -- Host: mysql
--- Tempo de geração: 25/07/2025 às 22:38
+-- Tempo de geração: 26/07/2025 às 07:37
 -- Versão do servidor: 8.0.43
 -- Versão do PHP: 8.2.27
 
@@ -38,15 +38,6 @@ CREATE TABLE `agents` (
   `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
   `updated_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
---
--- Despejando dados para a tabela `agents`
---
-
-INSERT INTO `agents` (`id`, `user_id`, `name`, `instructions`, `model`, `tools`, `is_active`, `created_at`, `updated_at`) VALUES
-(1, 1, 'Code Assistant', 'You are a helpful programming assistant. You specialize in PHP, JavaScript, and web development. Provide clear, well-commented code examples and explain programming concepts thoroughly.', 'gpt-4o-mini', '[\"Math\"]', 0, '2025-01-25 08:00:00', '2025-07-08 17:28:43'),
-(2, 1, 'Research Helper', 'You are a research assistant who helps gather information and analyze data. You can search the web and perform calculations to provide comprehensive answers.', 'gpt-4o-mini', '[\"Search\", \"Math\"]', 1, '2025-01-25 08:00:00', '2025-01-25 08:00:00'),
-(3, 1, 'Weather Assistant', 'You are a helpful weather assistant. You can provide current weather information for any location and help with weather-related planning.', 'gpt-4o-mini', '[\"Weather\"]', 1, '2025-01-25 08:00:00', '2025-01-25 08:00:00');
 
 -- --------------------------------------------------------
 
@@ -83,14 +74,20 @@ CREATE TABLE `notes` (
   `updated_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+-- --------------------------------------------------------
+
 --
--- Despejando dados para a tabela `notes`
+-- Estrutura para tabela `redis_fallback`
 --
 
-INSERT INTO `notes` (`id`, `title`, `content`, `created_at`, `updated_at`) VALUES
-(1, 'Welcome to Simple PHP Initialization', 'This is a sample note created by the database migration script.', '2025-05-21 13:40:56', '2025-05-21 13:40:56'),
-(2, 'Getting Started', 'Edit the public/index.php file to begin building your PHP application.', '2025-05-21 13:40:56', '2025-05-21 13:40:56'),
-(3, 'Database Connections', 'Use PDO to connect to MySQL from your PHP scripts.', '2025-05-21 13:40:56', '2025-05-21 13:40:56');
+CREATE TABLE `redis_fallback` (
+  `id` int NOT NULL,
+  `cache_key` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `cache_value` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `expires_at` timestamp NULL DEFAULT NULL,
+  `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- --------------------------------------------------------
 
@@ -132,14 +129,6 @@ CREATE TABLE `threads` (
   `updated_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
---
--- Despejando dados para a tabela `threads`
---
-
-INSERT INTO `threads` (`id`, `user_id`, `title`, `agent_id`, `messages`, `message_count`, `last_message_at`, `status`, `created_at`, `updated_at`) VALUES
-(1, 1, 'Welcome to OpenAI Webchat', NULL, '[\n  {\n    \"role\": \"system\",\n    \"content\": \"You are a helpful AI assistant.\",\n    \"timestamp\": \"2025-01-25T08:00:00Z\"\n  },\n  {\n    \"role\": \"assistant\", \n    \"content\": \"Hello! Welcome to OpenAI Webchat. I am your AI assistant. How can I help you today?\",\n    \"timestamp\": \"2025-01-25T08:00:01Z\"\n  }\n]', 2, '2025-01-25 08:00:01', 'active', '2025-01-25 08:00:00', '2025-07-08 14:12:55'),
-(2, 1, 'New Chat', NULL, '[{\"role\":\"user\",\"content\":\"hi\",\"timestamp\":\"2025-07-08T13:03:41+00:00\"},{\"role\":\"assistant\",\"content\":\"Hello! How can I assist you today?\",\"timestamp\":\"2025-07-08T13:03:42+00:00\",\"model\":\"gpt-4o-mini-2024-07-18\",\"token_usage\":{\"prompt_tokens\":8,\"completion_tokens\":9,\"total_tokens\":17,\"prompt_tokens_details\":{\"cached_tokens\":0,\"audio_tokens\":0},\"completion_tokens_details\":{\"reasoning_tokens\":0,\"audio_tokens\":0,\"accepted_prediction_tokens\":0,\"rejected_prediction_tokens\":0}}}]', 2, '2025-07-08 13:03:42', 'active', '2025-07-08 13:03:37', '2025-07-08 13:03:42');
-
 -- --------------------------------------------------------
 
 --
@@ -149,20 +138,13 @@ INSERT INTO `threads` (`id`, `user_id`, `title`, `agent_id`, `messages`, `messag
 CREATE TABLE `users` (
   `id` int NOT NULL,
   `username` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
-  `owner_jid` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `owner_jid` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `email` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
   `password_hash` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
   `full_name` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
   `updated_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
---
--- Despejando dados para a tabela `users`
---
-
-INSERT INTO `users` (`id`, `username`, `owner_jid`, `email`, `password_hash`, `full_name`, `created_at`, `updated_at`) VALUES
-(1, 'demo', NULL, 'demo@example.com', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'Demo User', '2025-01-25 08:00:00', '2025-07-08 12:52:44');
 
 -- --------------------------------------------------------
 
@@ -217,6 +199,7 @@ CREATE TABLE `whatsapp_instances` (
   `user_id` int NOT NULL,
   `instance_name` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
   `instance_id` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `token` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT 'Evolution API instance token for webhook authentication',
   `phone_number` varchar(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `status` enum('creating','connecting','connected','disconnected','failed') CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT 'creating',
   `qr_code` text CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci,
@@ -324,6 +307,15 @@ ALTER TABLE `notes`
   ADD PRIMARY KEY (`id`);
 
 --
+-- Índices de tabela `redis_fallback`
+--
+ALTER TABLE `redis_fallback`
+  ADD PRIMARY KEY (`id`),
+  ADD UNIQUE KEY `cache_key` (`cache_key`),
+  ADD KEY `idx_expires_at` (`expires_at`),
+  ADD KEY `idx_cache_key_expires` (`cache_key`,`expires_at`);
+
+--
 -- Índices de tabela `runs`
 --
 ALTER TABLE `runs`
@@ -386,7 +378,9 @@ ALTER TABLE `whatsapp_instances`
   ADD UNIQUE KEY `idx_user_instance` (`user_id`),
   ADD UNIQUE KEY `idx_instance_name` (`instance_name`),
   ADD KEY `idx_status` (`status`),
-  ADD KEY `idx_phone_number` (`phone_number`);
+  ADD KEY `idx_phone_number` (`phone_number`),
+  ADD KEY `idx_whatsapp_instances_token` (`token`),
+  ADD KEY `idx_whatsapp_instances_name` (`instance_name`);
 
 --
 -- Índices de tabela `whatsapp_messages`
@@ -429,7 +423,7 @@ ALTER TABLE `whatsapp_threads`
 -- AUTO_INCREMENT de tabela `agents`
 --
 ALTER TABLE `agents`
-  MODIFY `id` int NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=4;
+  MODIFY `id` int NOT NULL AUTO_INCREMENT;
 
 --
 -- AUTO_INCREMENT de tabela `message_queue`
@@ -441,7 +435,13 @@ ALTER TABLE `message_queue`
 -- AUTO_INCREMENT de tabela `notes`
 --
 ALTER TABLE `notes`
-  MODIFY `id` int NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=4;
+  MODIFY `id` int NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT de tabela `redis_fallback`
+--
+ALTER TABLE `redis_fallback`
+  MODIFY `id` int NOT NULL AUTO_INCREMENT;
 
 --
 -- AUTO_INCREMENT de tabela `runs`
@@ -453,13 +453,13 @@ ALTER TABLE `runs`
 -- AUTO_INCREMENT de tabela `threads`
 --
 ALTER TABLE `threads`
-  MODIFY `id` int NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=3;
+  MODIFY `id` int NOT NULL AUTO_INCREMENT;
 
 --
 -- AUTO_INCREMENT de tabela `users`
 --
 ALTER TABLE `users`
-  MODIFY `id` int NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=2;
+  MODIFY `id` int NOT NULL AUTO_INCREMENT;
 
 --
 -- AUTO_INCREMENT de tabela `whatsapp_contacts`
