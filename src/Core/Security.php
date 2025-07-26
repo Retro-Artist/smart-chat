@@ -177,11 +177,13 @@ class Security {
         
         $connectionState = self::checkWhatsAppConnection($userId);
         
-        // Only allow access if connection state is 'open'
-        if ($connectionState !== 'open') {
-            Helpers::redirect('/whatsapp/connect?state=' . urlencode($connectionState));
-            return;
+        // Allow access if WhatsApp is disabled or if connection state is 'open'
+        if ($connectionState === 'disabled' || $connectionState === 'open') {
+            return; // Access granted
         }
+        
+        // For all other states, redirect to WhatsApp connect page
+        Helpers::redirect('/whatsapp/connect?state=' . urlencode($connectionState));
     }
     
     /**

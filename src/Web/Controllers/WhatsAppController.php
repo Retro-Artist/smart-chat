@@ -69,22 +69,6 @@ class WhatsAppController {
             'connection_state' => $currentState
         ];
         
-        // Create instance if it doesn't exist
-        if (!$instance && WHATSAPP_AUTO_CREATE_INSTANCE) {
-            try {
-                $instance = $this->instanceManager->createInstance($userId);
-                $data['instance'] = $instance;
-                $currentState = 'creating';
-                unset($_SESSION['whatsapp_first_login']);
-            } catch (Exception $e) {
-                $data['error'] = 'Failed to create WhatsApp instance: ' . $e->getMessage();
-                $currentState = 'failed';
-                Logger::getInstance()->error("Failed to auto-create WhatsApp instance", [
-                    'user_id' => $userId,
-                    'error' => $e->getMessage()
-                ]);
-            }
-        }
         
         // If instance exists, get real-time connection state
         if ($instance) {
@@ -166,8 +150,8 @@ class WhatsAppController {
             // Generate new QR code
             $response = $evolutionAPI->connectInstance($instance['instance_name']);
             
-            if (isset($response['qrcode']['base64'])) {
-                $qrData = $response['qrcode']['base64'];
+            if (isset($response['base64'])) {
+                $qrData = $response['base64'];
                 // Cache QR code for 2 minutes
                 $redis->set($cacheKey, $qrData, 120);
                 
@@ -661,9 +645,9 @@ class WhatsAppController {
             require_once __DIR__ . '/../../Api/Models/WhatsAppSyncLog.php';
             $syncLogModel = new WhatsAppSyncLog();
             
-            $contactSync = $syncLogModel->getLatestSync($instance['id'], WhatsAppSyncLog::TYPE_CONTACTS);
-            $messageSync = $syncLogModel->getLatestSync($instance['id'], WhatsAppSyncLog::TYPE_MESSAGES);
-            $groupSync = $syncLogModel->getLatestSync($instance['id'], WhatsAppSyncLog::TYPE_GROUPS);
+            $contactSync = $syncLogModel->getLastSyncByType($instance['id'], WhatsAppSyncLog::TYPE_CONTACTS);
+            $messageSync = $syncLogModel->getLastSyncByType($instance['id'], WhatsAppSyncLog::TYPE_MESSAGES);
+            $groupSync = $syncLogModel->getLastSyncByType($instance['id'], WhatsAppSyncLog::TYPE_GROUPS);
             
             $status = [
                 'instance_status' => $instance['status'],
@@ -835,57 +819,6 @@ class WhatsAppController {
         }
     }
     
-    /**
-     * API endpoint to restart WhatsApp instance
-     */
-    public function restartInstance() {
-        header('Content-Type: application/json');
-        
-        try {
-            if (!Helpers::isAuthenticated()) {
-                echo json_encode([
-                    'success' => false,
-                    'error' => 'Unauthorized'
-                ]);
-                return;
-            }
-            
-            $userId = $_SESSION['user_id'];
-            $instance = $this->instanceModel->findByUserId($userId);
-            
-            if (!$instance) {
-                echo json_encode([
-                    'success' => false,
-                    'error' => 'No WhatsApp instance found'
-                ]);
-                return;
-            }
-            
-            $evolutionAPI = new EvolutionAPI();
-            $response = $evolutionAPI->restartInstance($instance['instance_name']);
-            
-            // Update instance status to connecting
-            $this->instanceModel->updateStatus($instance['id'], WhatsAppInstance::STATUS_CONNECTING);
-            
-            // Clear QR cache
-            require_once __DIR__ . '/../../Core/Redis.php';
-            $redis = Redis::getInstance();
-            $redis->delete("qr:{$instance['instance_name']}");
-            
-            echo json_encode([
-                'success' => true,
-                'message' => 'Instance restarted successfully',
-                'instance_name' => $instance['instance_name']
-            ]);
-            
-        } catch (Exception $e) {
-            Logger::getInstance()->error('Restart instance API error: ' . $e->getMessage());
-            echo json_encode([
-                'success' => false,
-                'error' => 'Failed to restart instance'
-            ]);
-        }
-    }
     
     /**
      * API endpoint to generate fresh QR code
@@ -908,7 +841,8 @@ class WhatsAppController {
             if (!$instance) {
                 echo json_encode([
                     'success' => false,
-                    'error' => 'No WhatsApp instance found'
+                    'error' => 'No WhatsApp instance found. Please create an instance first.',
+                    'state' => 'no_instance'
                 ]);
                 return;
             }

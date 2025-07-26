@@ -27,7 +27,7 @@ class InstanceManager {
     public function createInstance($userId, $phoneNumber = null) {
         try {
             $instanceName = $this->instanceModel->generateInstanceName($userId);
-            $webhookUrl = WHATSAPP_WEBHOOK_URL;
+            $webhookUrl = WEBHOOK_URL;
             
             Logger::getInstance()->info("Creating WhatsApp instance", [
                 'user_id' => $userId,
@@ -47,8 +47,8 @@ class InstanceManager {
                     'webhook_url' => $webhookUrl
                 ];
                 
-                if (isset($response['qrcode']['base64'])) {
-                    $updateData['qr_code'] = $response['qrcode']['base64'];
+                if (isset($response['base64'])) {
+                    $updateData['qr_code'] = $response['base64'];
                 }
                 
                 $this->instanceModel->update($instance['id'], $updateData);
@@ -438,7 +438,7 @@ class InstanceManager {
                 throw new Exception("Instance not found");
             }
             
-            $webhookUrl = $webhookUrl ?: WHATSAPP_WEBHOOK_URL;
+            $webhookUrl = $webhookUrl ?: WEBHOOK_URL;
             $events = $events ?: explode(',', WEBHOOK_ENABLED_EVENTS);
             
             $response = $this->evolutionAPI->setWebhook($instance['instance_name'], $webhookUrl, $events);

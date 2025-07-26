@@ -20,25 +20,20 @@ class EvolutionAPI {
     public function createInstance($instanceName, $phoneNumber = null, $webhookUrl = null) {
         $data = [
             'instanceName' => $instanceName,
-            'qrcode' => true,
-            'integration' => 'WHATSAPP-BAILEYS',
-            'rejectCall' => false,
-            'msgCall' => 'Please, wait a moment',
-            'groupsIgnore' => true,
-            'alwaysOnline' => false,
-            'readMessages' => false,
-            'readStatus' => false,
-            'syncFullHistory' => true
+            'integration' => 'WHATSAPP-BAILEYS'
         ];
         
         if ($phoneNumber) {
             $data['number'] = $phoneNumber;
         }
         
+        // Configure webhook according to the correct Evolution API format
         if ($webhookUrl) {
             $data['webhook'] = [
                 'url' => $webhookUrl,
-                'events' => explode(',', WEBHOOK_ENABLED_EVENTS)
+                'byEvents' => null,
+                'base64' => null,
+                'events' => explode(',', str_replace(' ', '', WEBHOOK_ENABLED_EVENTS))
             ];
         }
         
@@ -388,49 +383,4 @@ class EvolutionAPI {
         }
     }
     
-    public function restartInstance($instanceName) {
-        try {
-            $response = $this->makeRequest('PUT', "/instance/restart/{$instanceName}");
-            Logger::getInstance()->info("Instance restarted successfully", ['instance' => $instanceName]);
-            return $response;
-        } catch (Exception $e) {
-            Logger::getInstance()->error("Failed to restart instance {$instanceName}: " . $e->getMessage());
-            throw $e;
-        }
-    }
-    
-    public function connectInstance($instanceName) {
-        try {
-            $response = $this->makeRequest('GET', "/instance/connect/{$instanceName}");
-            
-            if (isset($response['base64'])) {
-                Logger::getInstance()->info("QR code generated successfully", ['instance' => $instanceName]);
-                return [
-                    'qrcode' => [
-                        'base64' => $response['base64'],
-                        'pairingCode' => $response['pairingCode'] ?? null
-                    ],
-                    'instance' => [
-                        'status' => $response['instance']['status'] ?? 'connecting'
-                    ]
-                ];
-            }
-            
-            return $response;
-        } catch (Exception $e) {
-            Logger::getInstance()->error("Failed to connect instance {$instanceName}: " . $e->getMessage());
-            throw $e;
-        }
-    }
-    
-    public function logoutInstance($instanceName) {
-        try {
-            $response = $this->makeRequest('DELETE', "/instance/logout/{$instanceName}");
-            Logger::getInstance()->info("Instance logged out successfully", ['instance' => $instanceName]);
-            return $response;
-        } catch (Exception $e) {
-            Logger::getInstance()->error("Failed to logout instance {$instanceName}: " . $e->getMessage());
-            throw $e;
-        }
-    }
 }

@@ -146,22 +146,10 @@ class AuthController {
             $instance = $instanceModel->findByUserId($userId);
             
             if (!$instance) {
-                // First time WhatsApp login - setup new instance
-                $instanceManager = new InstanceManager();
-                $result = $instanceManager->createInstance($userId);
-                
-                if ($result && isset($result['id'])) {
-                    // Instance created successfully - always redirect to QR scan
-                    $_SESSION['whatsapp_setup'] = true;
-                    $_SESSION['whatsapp_first_login'] = true;
-                    $_SESSION['connection_state'] = 'creating';
-                    Helpers::redirect('/whatsapp/connect?state=creating');
-                } else {
-                    // Failed to create instance - still redirect to QR scan to handle error
-                    $_SESSION['error'] = 'Failed to setup WhatsApp: Unable to create instance';
-                    $_SESSION['connection_state'] = 'failed';
-                    Helpers::redirect('/whatsapp/connect?state=failed');
-                }
+                // No instance exists - redirect to WhatsApp connect page 
+                // where user can manually create an instance if needed
+                $_SESSION['connection_state'] = 'no_instance';
+                Helpers::redirect('/whatsapp/connect?state=no_instance');
             } else {
                 // Check real-time connection state from Evolution API
                 $evolutionAPI = new EvolutionAPI();

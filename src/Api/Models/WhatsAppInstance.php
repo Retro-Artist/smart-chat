@@ -269,7 +269,19 @@ class WhatsAppInstance {
     }
     
     public function generateInstanceName($userId) {
-        $baseName = "user_{$userId}_" . date('Ymd');
+        // Get username from users table
+        $userSql = "SELECT username FROM users WHERE id = ?";
+        $user = $this->db->fetch($userSql, [$userId]);
+        
+        if (!$user || !$user['username']) {
+            // Fallback to user ID if username not found
+            $baseName = "user_{$userId}";
+        } else {
+            // Use username to create instance name (sanitized for URL safety)
+            $username = preg_replace('/[^a-zA-Z0-9_-]/', '', $user['username']);
+            $baseName = strtolower($username);
+        }
+        
         $counter = 1;
         
         do {
