@@ -60,6 +60,7 @@ class WhatsAppController {
         $error = $_GET['error'] ?? null;
         $currentState = $_GET['state'] ?? 'unknown';
         $successMessage = $_GET['success'] ?? null;
+        $wasRefreshed = isset($_GET['refreshed']);
         
         // Handle POST requests for server-side form processing
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -100,7 +101,7 @@ class WhatsAppController {
         // Smart QR code management based on connection state
         $qrData = null;
         if ($instance && $currentState !== 'open') {
-            $qrData = $this->getSmartQRCode($instance, $currentState);
+            $qrData = $this->getSmartQRCode($instance, $currentState, $wasRefreshed);
             $data['qr_code'] = $qrData;
         }
         
@@ -110,7 +111,7 @@ class WhatsAppController {
     /**
      * Smart QR code generation based on connection state
      */
-    private function getSmartQRCode($instance, $connectionState) {
+    private function getSmartQRCode($instance, $connectionState, $forceRefresh = false) {
         require_once __DIR__ . '/../../Core/Redis.php';
         $redis = Redis::getInstance();
         $cacheKey = "qr:{$instance['instance_name']}";
@@ -122,15 +123,22 @@ class WhatsAppController {
             // Handle different connection states intelligently
             switch ($connectionState) {
                 case 'connecting':
-                    // Use existing QR code if available and not expired
-                    $qrData = $redis->get($cacheKey);
-                    if ($qrData) {
-                        Logger::getInstance()->info("Using existing QR code for connecting instance", [
+                    // Use existing QR code if available and not expired (unless force refresh)
+                    if (!$forceRefresh) {
+                        $qrData = $redis->get($cacheKey);
+                        if ($qrData) {
+                            Logger::getInstance()->info("Using existing QR code for connecting instance", [
+                                'instance' => $instance['instance_name']
+                            ]);
+                            return $qrData;
+                        }
+                    } else {
+                        Logger::getInstance()->info("Forcing fresh QR generation in view due to refresh", [
                             'instance' => $instance['instance_name']
                         ]);
-                        return $qrData;
+                        $redis->delete($cacheKey);
                     }
-                    // If no cached QR, generate fresh one
+                    // If no cached QR or force refresh, generate fresh one
                     break;
                     
                 case 'disconnected':
@@ -263,7 +271,7 @@ class WhatsAppController {
             }
             
             // Use bulletproof QR generation workflow
-            $qrResult = $this->executeQRGenerationWorkflow($instance, $connectionState);
+            $qrResult = $this->executeQRGenerationWorkflow($instance, $connectionState, false);
             
             if ($qrResult['success']) {
                 Helpers::redirect('/whatsapp/connect?success=' . urlencode('QR Code generated successfully! Scan with your phone.') . '&state=' . $qrResult['state']);
@@ -281,7 +289,55 @@ class WhatsAppController {
      * Handle refresh QR form submission
      */
     private function handleRefreshQRForm($instance) {
-        return $this->handleGenerateQRForm($instance); // Same logic as generate
+        if (!$instance) {
+            Helpers::redirect('/whatsapp/connect?error=' . urlencode('No WhatsApp instance found'));
+            return;
+        }
+
+        try {
+            // Force clear QR cache for refresh
+            require_once __DIR__ . '/../../Core/Redis.php';
+            $redis = Redis::getInstance();
+            $cacheKey = "qr:{$instance['instance_name']}";
+            $redis->delete($cacheKey);
+            
+            Logger::getInstance()->info("QR cache cleared for refresh", ['instance' => $instance['instance_name']]);
+
+            // Force Evolution API to restart the connection to get a truly fresh QR
+            $evolutionAPI = new EvolutionAPI();
+            
+            // Restart instance to get fresh QR
+            try {
+                Logger::getInstance()->info("Restarting Evolution API instance for fresh QR", ['instance' => $instance['instance_name']]);
+                $evolutionAPI->restartInstance($instance['instance_name']);
+                sleep(3); // Wait for restart to complete
+            } catch (Exception $e) {
+                Logger::getInstance()->warning("Instance restart failed, continuing with normal refresh: " . $e->getMessage());
+            }
+            
+            $connectionState = $evolutionAPI->getConnectionState($instance['instance_name']);
+            
+            // If already connected, redirect to dashboard
+            if ($connectionState === 'open') {
+                require_once __DIR__ . '/../../Core/Security.php';
+                Security::updateWhatsAppAuthState($instance['user_id'], $connectionState);
+                Helpers::redirect('/dashboard');
+                return;
+            }
+
+            // Use bulletproof QR generation workflow with forced refresh
+            $qrResult = $this->executeQRGenerationWorkflow($instance, $connectionState, true); // Force refresh
+            
+            if ($qrResult['success']) {
+                Helpers::redirect('/whatsapp/connect?success=' . urlencode('QR Code refreshed successfully! Scan with your phone.') . '&state=' . $qrResult['state'] . '&refreshed=1');
+            } else {
+                Helpers::redirect('/whatsapp/connect?error=' . urlencode($qrResult['error']) . '&state=' . ($qrResult['state'] ?? $connectionState));
+            }
+            
+        } catch (Exception $e) {
+            Logger::getInstance()->error("Refresh QR form error: " . $e->getMessage());
+            Helpers::redirect('/whatsapp/connect?error=' . urlencode('Failed to refresh QR code: ' . $e->getMessage()));
+        }
     }
     
     /**
@@ -1000,7 +1056,7 @@ class WhatsAppController {
             }
             
             // Use bulletproof QR generation workflow
-            $qrResult = $this->executeQRGenerationWorkflow($instance, $connectionState);
+            $qrResult = $this->executeQRGenerationWorkflow($instance, $connectionState, false);
             
             if ($qrResult['success']) {
                 echo json_encode([
@@ -1033,7 +1089,7 @@ class WhatsAppController {
      * Bulletproof QR generation workflow
      * Handles all connection states intelligently
      */
-    private function executeQRGenerationWorkflow($instance, $connectionState) {
+    private function executeQRGenerationWorkflow($instance, $connectionState, $forceRefresh = false) {
         try {
             $evolutionAPI = new EvolutionAPI();
             require_once __DIR__ . '/../../Core/Redis.php';
@@ -1047,18 +1103,23 @@ class WhatsAppController {
             
             switch ($connectionState) {
                 case 'connecting':
-                    // Use existing QR if available and not expired
-                    $cachedQR = $redis->get($cacheKey);
-                    if ($cachedQR) {
-                        Logger::getInstance()->info("Using cached QR for connecting instance");
-                        return [
-                            'success' => true,
-                            'qr_code' => $cachedQR,
-                            'state' => $connectionState,
-                            'workflow_action' => 'cached'
-                        ];
+                    // Use existing QR if available and not expired (unless force refresh)
+                    if (!$forceRefresh) {
+                        $cachedQR = $redis->get($cacheKey);
+                        if ($cachedQR) {
+                            Logger::getInstance()->info("Using cached QR for connecting instance");
+                            return [
+                                'success' => true,
+                                'qr_code' => $cachedQR,
+                                'state' => $connectionState,
+                                'workflow_action' => 'cached'
+                            ];
+                        }
+                    } else {
+                        Logger::getInstance()->info("Forcing fresh QR generation due to refresh request");
+                        $redis->delete($cacheKey);
                     }
-                    // If no cached QR, generate fresh one
+                    // If no cached QR or force refresh, generate fresh one
                     return $this->generateFreshQRCode($instance, $evolutionAPI, $redis, $cacheKey);
                     
                 case 'disconnected':
