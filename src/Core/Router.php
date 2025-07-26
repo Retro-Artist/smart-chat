@@ -81,6 +81,9 @@ class Router {
     }
     
     private function callHandler($route) {
+        // Check authentication before calling any handler
+        $this->checkAuthentication($route);
+        
         list($handlerName, $methodName) = explode('@', $route['handler']);
         
         // Simplified controller path resolution
@@ -215,5 +218,31 @@ class Router {
      */
     public function getRouteParameters() {
         return $this->routeParameters;
+    }
+    
+    /**
+     * Check authentication for routes
+     * Implements router-level authentication gate with public route whitelisting
+     */
+    private function checkAuthentication($route) {
+        $path = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH);
+        $isApiRequest = strpos($path, '/api/') === 0;
+        
+        // Load Security class for authentication checks
+        require_once __DIR__ . '/Security.php';
+        
+        // Check if this is a public route that doesn't require full authentication
+        if (Security::isPublicRoute($path)) {
+            return; // Allow public routes to proceed
+        }
+        
+        // For all other routes, require full authentication (session + WhatsApp if enabled)
+        if ($isApiRequest) {
+            // API routes - return JSON error if not fully authenticated
+            Security::requireFullAuthenticationAPI();
+        } else {
+            // Web routes - redirect to appropriate auth step if not fully authenticated
+            Security::requireFullAuthentication();
+        }
     }
 }

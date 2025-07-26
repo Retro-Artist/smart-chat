@@ -214,4 +214,177 @@ class Security {
             return;
         }
     }
+    
+    /**
+     * Check if user is fully authenticated (session + WhatsApp connection)
+     * This is the main authentication check for the 2-step auth system
+     */
+    public static function isFullyAuthenticated($userId = null) {
+        require_once __DIR__ . '/Helpers.php';
+        
+        // First check basic session authentication
+        if (!Helpers::isAuthenticated()) {
+            return false;
+        }
+        
+        // If WhatsApp is disabled, only session auth is required
+        if (!defined('WHATSAPP_ENABLED') || !WHATSAPP_ENABLED) {
+            return true;
+        }
+        
+        $userId = $userId ?: Helpers::getCurrentUserId();
+        
+        if (!$userId) {
+            return false;
+        }
+        
+        // Check cached WhatsApp auth state first (for performance)
+        if (isset($_SESSION['whatsapp_authenticated']) && 
+            isset($_SESSION['last_connection_check']) &&
+            (time() - $_SESSION['last_connection_check']) < 30) {
+            return $_SESSION['whatsapp_authenticated'];
+        }
+        
+        // Check real-time WhatsApp connection state
+        $connectionState = self::checkWhatsAppConnection($userId);
+        $isWhatsAppAuthenticated = ($connectionState === 'open');
+        
+        // Update session cache
+        $_SESSION['whatsapp_authenticated'] = $isWhatsAppAuthenticated;
+        $_SESSION['connection_state'] = $connectionState;
+        $_SESSION['last_connection_check'] = time();
+        
+        return $isWhatsAppAuthenticated;
+    }
+    
+    /**
+     * Require full authentication (session + WhatsApp) for web endpoints
+     * Redirects to appropriate authentication step if not fully authenticated
+     */
+    public static function requireFullAuthentication($userId = null) {
+        require_once __DIR__ . '/Helpers.php';
+        
+        // First check basic session authentication
+        if (!Helpers::isAuthenticated()) {
+            Helpers::redirect('/login');
+            return;
+        }
+        
+        // If WhatsApp is disabled, only session auth is required
+        if (!defined('WHATSAPP_ENABLED') || !WHATSAPP_ENABLED) {
+            return; // Access granted
+        }
+        
+        $userId = $userId ?: Helpers::getCurrentUserId();
+        
+        if (!$userId) {
+            Helpers::redirect('/login');
+            return;
+        }
+        
+        // Check WhatsApp connection state
+        if (!self::isFullyAuthenticated($userId)) {
+            $connectionState = $_SESSION['connection_state'] ?? 'unknown';
+            
+            // Redirect to WhatsApp connect page with current state
+            Helpers::redirect('/whatsapp/connect?state=' . urlencode($connectionState));
+            return;
+        }
+        
+        // Full authentication successful - access granted
+    }
+    
+    /**
+     * Require full authentication for API endpoints
+     * Returns JSON error if not fully authenticated
+     */
+    public static function requireFullAuthenticationAPI($userId = null) {
+        require_once __DIR__ . '/Helpers.php';
+        
+        // First check basic session authentication
+        if (!Helpers::isAuthenticated()) {
+            Helpers::jsonError('Not authenticated. Please log in.', 401);
+            return;
+        }
+        
+        // If WhatsApp is disabled, only session auth is required
+        if (!defined('WHATSAPP_ENABLED') || !WHATSAPP_ENABLED) {
+            return; // Access granted
+        }
+        
+        $userId = $userId ?: Helpers::getCurrentUserId();
+        
+        if (!$userId) {
+            Helpers::jsonError('Invalid user session', 401);
+            return;
+        }
+        
+        // Check full authentication
+        if (!self::isFullyAuthenticated($userId)) {
+            $connectionState = $_SESSION['connection_state'] ?? 'unknown';
+            
+            Helpers::jsonError(
+                'WhatsApp authentication required. Current state: ' . $connectionState, 
+                403, 
+                ['requires_whatsapp_auth' => true, 'connection_state' => $connectionState]
+            );
+            return;
+        }
+        
+        // Full authentication successful - access granted
+    }
+    
+    /**
+     * Update WhatsApp authentication state in session
+     * Called when connection state changes
+     */
+    public static function updateWhatsAppAuthState($userId, $connectionState) {
+        $isAuthenticated = ($connectionState === 'open');
+        
+        $_SESSION['whatsapp_authenticated'] = $isAuthenticated;
+        $_SESSION['connection_state'] = $connectionState;
+        $_SESSION['last_connection_check'] = time();
+        
+        return $isAuthenticated;
+    }
+    
+    /**
+     * Clear WhatsApp authentication state
+     * Called on logout or disconnection
+     */
+    public static function clearWhatsAppAuthState() {
+        unset($_SESSION['whatsapp_authenticated']);
+        unset($_SESSION['connection_state']);
+        unset($_SESSION['last_connection_check']);
+    }
+    
+    /**
+     * Get public routes that don't require full authentication
+     */
+    public static function getPublicRoutes() {
+        return [
+            '/',
+            '/login',
+            '/register',
+            '/logout',
+            '/whatsapp/connect',
+            '/whatsapp/createInstance',
+            '/whatsapp/generateQR', 
+            '/whatsapp/getConnectionState',
+            '/whatsapp/checkConnectionStatus',
+            '/whatsapp/pollConnectionStatus'
+        ];
+    }
+    
+    /**
+     * Check if a route is public (doesn't require full authentication)
+     */
+    public static function isPublicRoute($route) {
+        $publicRoutes = self::getPublicRoutes();
+        
+        // Remove query parameters for comparison
+        $cleanRoute = parse_url($route, PHP_URL_PATH);
+        
+        return in_array($cleanRoute, $publicRoutes);
+    }
 }

@@ -18,6 +18,15 @@ class Helpers {
     }
     
     /**
+     * Check if user is fully authenticated (session + WhatsApp if enabled)
+     * This is the main authentication method for the 2-step auth system
+     */
+    public static function isFullyAuthenticated() {
+        require_once __DIR__ . '/Security.php';
+        return Security::isFullyAuthenticated();
+    }
+    
+    /**
      * Redirect to a URL
      */
     public static function redirect($url) {
@@ -38,8 +47,9 @@ class Helpers {
     /**
      * Return JSON error response
      */
-    public static function jsonError($message, $statusCode = 400) {
-        self::jsonResponse(['error' => $message], $statusCode);
+    public static function jsonError($message, $statusCode = 400, $additionalData = []) {
+        $response = array_merge(['error' => $message], $additionalData);
+        self::jsonResponse($response, $statusCode);
     }
     
     /**

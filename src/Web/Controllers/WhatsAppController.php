@@ -16,9 +16,8 @@ class WhatsAppController {
     private $messageModel;
     
     public function __construct() {
-        if (!Helpers::isAuthenticated()) {
-            Helpers::redirect('/login');
-        }
+        // WhatsApp controller has mixed public/protected routes
+        // Authentication is handled per-method basis or by router for protected routes
         
         if (!WHATSAPP_ENABLED) {
             Helpers::redirect('/dashboard');
@@ -183,9 +182,9 @@ class WhatsAppController {
     }
     
     public function chat() {
-        // Check if user is logged in and WhatsApp is connected
+        // Check if user is fully authenticated (session + WhatsApp connection)
         require_once __DIR__ . '/../../Core/Security.php';
-        Security::requireWhatsAppConnection();
+        Security::requireFullAuthentication();
         
         $userId = $_SESSION['user_id'];
         $instance = $this->instanceModel->findByUserId($userId);
@@ -718,7 +717,7 @@ class WhatsAppController {
             
             // Get real-time status from Evolution API
             $evolutionAPI = new EvolutionAPI();
-            $response = $evolutionAPI->findInstance($instance['instance_name']);
+            $response = $evolutionAPI->getInstance($instance['instance_name']);
             
             $status = 'disconnected';
             if (isset($response['connectionStatus'])) {
@@ -822,6 +821,7 @@ class WhatsAppController {
     
     /**
      * API endpoint to generate fresh QR code
+     * Enhanced with bulletproof workflow handling
      */
     public function generateQR() {
         header('Content-Type: application/json');
@@ -853,6 +853,10 @@ class WhatsAppController {
             
             // If already connected, don't generate QR
             if ($connectionState === 'open') {
+                // Update session auth state
+                require_once __DIR__ . '/../../Core/Security.php';
+                Security::updateWhatsAppAuthState($userId, $connectionState);
+                
                 echo json_encode([
                     'success' => false,
                     'error' => 'Instance is already connected',
@@ -863,21 +867,24 @@ class WhatsAppController {
                 return;
             }
             
-            // Use smart QR generation
-            $qrData = $this->getSmartQRCode($instance, $connectionState);
+            // Use bulletproof QR generation workflow
+            $qrResult = $this->executeQRGenerationWorkflow($instance, $connectionState);
             
-            if ($qrData) {
+            if ($qrResult['success']) {
                 echo json_encode([
                     'success' => true,
-                    'qr_code' => $qrData,
-                    'state' => $connectionState,
-                    'generated_at' => date('Y-m-d H:i:s')
+                    'qr_code' => $qrResult['qr_code'],
+                    'state' => $qrResult['state'],
+                    'workflow_action' => $qrResult['workflow_action'] ?? 'generate',
+                    'generated_at' => date('Y-m-d H:i:s'),
+                    'expires_at' => date('Y-m-d H:i:s', time() + 120) // 2 minutes
                 ]);
             } else {
                 echo json_encode([
                     'success' => false,
-                    'error' => 'Failed to generate QR code',
-                    'state' => $connectionState
+                    'error' => $qrResult['error'],
+                    'state' => $qrResult['state'] ?? $connectionState,
+                    'workflow_action' => $qrResult['workflow_action'] ?? 'failed'
                 ]);
             }
             
@@ -885,7 +892,175 @@ class WhatsAppController {
             Logger::getInstance()->error('Generate QR API error: ' . $e->getMessage());
             echo json_encode([
                 'success' => false,
-                'error' => 'Failed to generate QR code'
+                'error' => 'Failed to generate QR code: ' . $e->getMessage()
+            ]);
+        }
+    }
+    
+    /**
+     * Bulletproof QR generation workflow
+     * Handles all connection states intelligently
+     */
+    private function executeQRGenerationWorkflow($instance, $connectionState) {
+        try {
+            $evolutionAPI = new EvolutionAPI();
+            require_once __DIR__ . '/../../Core/Redis.php';
+            $redis = Redis::getInstance();
+            $cacheKey = "qr:{$instance['instance_name']}";
+            
+            Logger::getInstance()->info("Executing QR workflow", [
+                'instance' => $instance['instance_name'],
+                'current_state' => $connectionState
+            ]);
+            
+            switch ($connectionState) {
+                case 'connecting':
+                    // Use existing QR if available and not expired
+                    $cachedQR = $redis->get($cacheKey);
+                    if ($cachedQR) {
+                        Logger::getInstance()->info("Using cached QR for connecting instance");
+                        return [
+                            'success' => true,
+                            'qr_code' => $cachedQR,
+                            'state' => $connectionState,
+                            'workflow_action' => 'cached'
+                        ];
+                    }
+                    // If no cached QR, generate fresh one
+                    return $this->generateFreshQRCode($instance, $evolutionAPI, $redis, $cacheKey);
+                    
+                case 'disconnected':
+                case 'failed':
+                    // Restart instance first, then generate new QR
+                    Logger::getInstance()->info("Restarting instance due to failed state: {$connectionState}");
+                    
+                    try {
+                        $evolutionAPI->restartInstance($instance['instance_name']);
+                        // Wait for restart to complete
+                        sleep(2);
+                        // Clear old cache
+                        $redis->delete($cacheKey);
+                        
+                        $result = $this->generateFreshQRCode($instance, $evolutionAPI, $redis, $cacheKey);
+                        $result['workflow_action'] = 'restart_and_generate';
+                        return $result;
+                        
+                    } catch (Exception $e) {
+                        Logger::getInstance()->error("Instance restart failed: " . $e->getMessage());
+                        return [
+                            'success' => false,
+                            'error' => 'Failed to restart instance: ' . $e->getMessage(),
+                            'state' => $connectionState,
+                            'workflow_action' => 'restart_failed'
+                        ];
+                    }
+                    
+                case 'close':
+                case 'unknown':
+                default:
+                    // Generate fresh QR code
+                    $redis->delete($cacheKey);
+                    return $this->generateFreshQRCode($instance, $evolutionAPI, $redis, $cacheKey);
+            }
+            
+        } catch (Exception $e) {
+            Logger::getInstance()->error('QR workflow execution failed: ' . $e->getMessage());
+            return [
+                'success' => false,
+                'error' => 'Workflow execution failed: ' . $e->getMessage(),
+                'state' => $connectionState,
+                'workflow_action' => 'workflow_error'
+            ];
+        }
+    }
+    
+    /**
+     * Generate fresh QR code and cache it
+     */
+    private function generateFreshQRCode($instance, $evolutionAPI, $redis, $cacheKey) {
+        try {
+            $response = $evolutionAPI->connectInstance($instance['instance_name']);
+            
+            if (isset($response['base64'])) {
+                $qrData = $response['base64'];
+                
+                // Cache QR code for 2 minutes
+                $redis->set($cacheKey, $qrData, 120);
+                
+                Logger::getInstance()->info("Generated fresh QR code", [
+                    'instance' => $instance['instance_name']
+                ]);
+                
+                return [
+                    'success' => true,
+                    'qr_code' => $qrData,
+                    'state' => 'connecting',
+                    'workflow_action' => 'generate_fresh'
+                ];
+            } else {
+                throw new Exception('No QR code received from Evolution API');
+            }
+            
+        } catch (Exception $e) {
+            Logger::getInstance()->error('Fresh QR generation failed: ' . $e->getMessage());
+            return [
+                'success' => false,
+                'error' => 'QR generation failed: ' . $e->getMessage(),
+                'workflow_action' => 'generate_failed'
+            ];
+        }
+    }
+    
+    /**
+     * API endpoint to check real-time connection status
+     * Used for polling during QR scan process
+     */
+    public function pollConnectionStatus() {
+        header('Content-Type: application/json');
+        
+        try {
+            if (!Helpers::isAuthenticated()) {
+                echo json_encode([
+                    'success' => false,
+                    'error' => 'Unauthorized'
+                ]);
+                return;
+            }
+            
+            $userId = $_SESSION['user_id'];
+            $instance = $this->instanceModel->findByUserId($userId);
+            
+            if (!$instance) {
+                echo json_encode([
+                    'success' => true,
+                    'state' => 'no_instance',
+                    'timestamp' => time()
+                ]);
+                return;
+            }
+            
+            $evolutionAPI = new EvolutionAPI();
+            $connectionState = $evolutionAPI->getConnectionState($instance['instance_name']);
+            
+            // Update session auth state
+            require_once __DIR__ . '/../../Core/Security.php';
+            Security::updateWhatsAppAuthState($userId, $connectionState);
+            
+            echo json_encode([
+                'success' => true,
+                'state' => $connectionState,
+                'instance_name' => $instance['instance_name'],
+                'timestamp' => time(),
+                'should_redirect' => ($connectionState === 'open'),
+                'redirect_url' => ($connectionState === 'open') ? '/dashboard' : null
+            ]);
+            
+        } catch (Exception $e) {
+            Logger::getInstance()->error('Connection status polling error: ' . $e->getMessage());
+            echo json_encode([
+                'success' => false,
+                'error' => 'Failed to check connection status',
+                'state' => 'error'
             ]);
         }
     }

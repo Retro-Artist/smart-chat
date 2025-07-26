@@ -7,9 +7,7 @@ require_once __DIR__ . '/../../Api/Models/Agent.php';
 class AgentController {
     
     public function index() {
-        // Check if user is logged in and WhatsApp is connected
-        require_once __DIR__ . '/../../Core/Security.php';
-        Security::requireWhatsAppConnection();
+        // Authentication is now handled by router-level authentication gate
         
         // Get user's agents
         $agents = Agent::getUserAgents(Helpers::getCurrentUserId());

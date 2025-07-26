@@ -80,6 +80,7 @@ if (defined('WHATSAPP_ENABLED') && WHATSAPP_ENABLED) {
     // Instance management
     $router->addApiRoute('GET', '/api/whatsapp/status', 'WhatsAppController@checkStatus');
     $router->addApiRoute('GET', '/whatsapp/getConnectionState', 'WhatsAppController@getConnectionState');
+    $router->addApiRoute('GET', '/whatsapp/pollConnectionStatus', 'WhatsAppController@pollConnectionStatus');
     $router->addApiRoute('POST', '/whatsapp/generateQR', 'WhatsAppController@generateQR');
     $router->addApiRoute('POST', '/whatsapp/createInstance', 'WhatsAppController@createInstance');
     $router->addApiRoute('POST', '/whatsapp/restartInstance', 'WhatsAppController@restartInstance');

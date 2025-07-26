@@ -131,6 +131,10 @@ class AuthController {
     }
     
     public function logout() {
+        // Clear WhatsApp authentication state before destroying session
+        require_once __DIR__ . '/../../Core/Security.php';
+        Security::clearWhatsAppAuthState();
+        
         // Destroy session
         session_destroy();
         
