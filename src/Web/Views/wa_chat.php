@@ -10,6 +10,29 @@ $contactInfo = $data['contact_info'] ?? null;
 $messages = $data['messages'] ?? [];
 $userPhone = $data['user_phone'] ?? '';
 ?>
+<!DOCTYPE html>
+<html lang="en" class="h-full">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title><?= htmlspecialchars($pageTitle ?? 'WhatsApp Chat - Smart Chat') ?></title>
+    <link rel="icon" type="image/x-icon" href="/favicon.ico">
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: "class",
+        };
+    </script>
+    
+    <!-- Alpine.js -->
+    <script src="/assets/js/alpine.min.js" defer></script>
+    
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body class="bg-gray-50 dark:bg-gray-900 h-full">
 
 <div class="h-screen bg-gray-100 dark:bg-gray-900 flex" x-data="whatsappChat()" x-init="init()">
     
@@ -618,3 +641,8 @@ function whatsappChat() {
     }
 }
 </script>
+
+</div>
+
+</body>
+</html>

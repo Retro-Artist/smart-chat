@@ -78,15 +78,19 @@ $router->addApiRoute('GET', '/api/system/config', 'SystemAPI@getConfig');
 
 // WhatsApp API Routes (only if WhatsApp is enabled)
 if (defined('WHATSAPP_ENABLED') && WHATSAPP_ENABLED) {
+    // CONSOLIDATED ENDPOINTS - Updated to use new unified functions
+    $router->addApiRoute('POST', '/whatsapp/generateQR', 'WhatsAppController@generateQR');              // Unified QR generation
+    $router->addApiRoute('GET', '/whatsapp/getConnectionStatus', 'WhatsAppController@getConnectionStatus'); // Unified status check
+    $router->addApiRoute('GET', '/whatsapp/connectionStatusStream', 'WhatsAppController@connectionStatusStream'); // Real-time SSE
+    
     // Instance management
-    $router->addApiRoute('GET', '/api/whatsapp/status', 'WhatsAppController@checkStatus');
-    $router->addApiRoute('GET', '/whatsapp/getConnectionState', 'WhatsAppController@getConnectionState');
-    $router->addApiRoute('GET', '/whatsapp/pollConnectionStatus', 'WhatsAppController@pollConnectionStatus');
-    $router->addApiRoute('GET', '/whatsapp/connectionStatusStream', 'WhatsAppController@connectionStatusStream');
-    $router->addApiRoute('POST', '/whatsapp/generateQR', 'WhatsAppController@generateQR');
     $router->addApiRoute('POST', '/whatsapp/createInstance', 'WhatsAppController@createInstance');
     $router->addApiRoute('POST', '/whatsapp/restartInstance', 'WhatsAppController@restartInstance');
+    $router->addApiRoute('POST', '/whatsapp/disconnect', 'WhatsAppController@disconnect');
+    
+    // Alternative API paths for backwards compatibility
     $router->addApiRoute('POST', '/api/whatsapp/qr', 'WhatsAppController@generateQR');
+    $router->addApiRoute('GET', '/api/whatsapp/status', 'WhatsAppController@getConnectionStatus');
     $router->addApiRoute('POST', '/api/whatsapp/restart', 'WhatsAppController@restartInstance');
     $router->addApiRoute('POST', '/api/whatsapp/disconnect', 'WhatsAppController@disconnect');
     
@@ -94,9 +98,12 @@ if (defined('WHATSAPP_ENABLED') && WHATSAPP_ENABLED) {
     $router->addApiRoute('POST', '/api/whatsapp/send', 'WhatsAppController@sendMessage');
     $router->addApiRoute('GET', '/api/whatsapp/messages', 'WhatsAppController@getMessages');
     $router->addApiRoute('GET', '/api/whatsapp/conversations', 'WhatsAppController@getConversations');
+    $router->addApiRoute('GET', '/api/whatsapp/contacts', 'WhatsAppController@getContacts');
     
     // Sync operations
     $router->addApiRoute('POST', '/api/whatsapp/sync', 'WhatsAppController@syncData');
+    $router->addApiRoute('POST', '/api/whatsapp/refreshContacts', 'WhatsAppController@refreshContacts');
+    $router->addApiRoute('GET', '/api/whatsapp/syncStatus', 'WhatsAppController@getSyncStatus');
 }
 
 // ===================================

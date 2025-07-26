@@ -370,9 +370,7 @@ class Security {
             '/whatsapp/connect',
             '/whatsapp/createInstance',
             '/whatsapp/generateQR', 
-            '/whatsapp/getConnectionState',
-            '/whatsapp/checkConnectionStatus',
-            '/whatsapp/pollConnectionStatus'
+            '/whatsapp/getConnectionStatus'  // Consolidated endpoint
         ];
     }
     

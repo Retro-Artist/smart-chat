@@ -320,4 +320,22 @@ class WhatsAppInstance {
         
         return (time() - $updatedAt) < $qrExpiryTime;
     }
+    
+    public function updateEvolutionInstanceId($id, $evolutionInstanceId) {
+        $sql = "UPDATE whatsapp_instances SET instance_id = ?, updated_at = NOW() WHERE id = ?";
+        
+        try {
+            $this->db->query($sql, [$evolutionInstanceId, $id]);
+            
+            Logger::getInstance()->info("WhatsApp instance Evolution ID updated", [
+                'instance_id' => $id,
+                'evolution_instance_id' => $evolutionInstanceId
+            ]);
+            
+            return true;
+        } catch (Exception $e) {
+            Logger::getInstance()->error("Failed to update Evolution instance ID: " . $e->getMessage());
+            return false;
+        }
+    }
 }
